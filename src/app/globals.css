@@ -1,26 +1,123 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ===== SoDev Design Tokens (from Readit-style prototype) ===== */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Backgrounds */
+  --color-bg:       #0b0b0d;
+  --color-rail:     #0e0e11;
+  --color-panel:    #141417;
+  --color-panel-2:  #1a1a1f;
+  --color-hover:    #1f1f25;
+
+  /* Borders */
+  --color-line:     rgba(255,255,255,0.06);
+  --color-line-2:   rgba(255,255,255,0.10);
+
+  /* Text */
+  --color-text:     #f3f3f5;
+  --color-text-2:   #a9a9b2;
+  --color-text-3:   #6c6c76;
+
+  /* Accent – hot pink (default) */
+  --color-accent:       #ff2e7e;
+  --color-accent-soft:  rgba(255,46,126,0.14);
+
+  /* Other accent colors */
+  --color-ember: #ff5630;
+  --color-gold:  #f5c451;
+  --color-blue:  #5aa0ff;
+
+  /* Typography */
+  --font-sans: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "Cascadia Code", Consolas, "SF Mono", ui-monospace, monospace;
+
+  /* Radius */
+  --radius: 4px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ===== Base ===== */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+/* ===== Animations ===== */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes searchBoxIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes scrimSpread {
+  from { clip-path: circle(0% at 50% 30%);   opacity: 0; }
+  to   { clip-path: circle(150% at 50% 30%); opacity: 1; }
+}
+
+/* ===== Floating label inputs ===== */
+.field { position: relative; margin-bottom: 16px; }
+.field input {
+  width: 100%;
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-bottom: 2px solid var(--color-line-2);
+  color: var(--color-text);
+  padding: 22px 14px 8px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  border-radius: var(--radius) var(--radius) 0 0;
+  outline: none;
+  transition: border-color .16s, background .16s;
+}
+.field input:focus {
+  border-bottom-color: var(--color-accent);
+  background: var(--color-panel-2);
+}
+.field label {
+  position: absolute;
+  left: 14px;
+  top: 15px;
+  color: var(--color-text-3);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  pointer-events: none;
+  transition: .14s ease;
+}
+.field input:focus + label,
+.field input:not(:placeholder-shown) + label {
+  top: 6px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* ===== Custom scrollbar ===== */
+.scroll::-webkit-scrollbar { width: 10px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.22);
+  background-clip: content-box;
+}
+.scroll::-webkit-scrollbar-track { background: transparent; }
