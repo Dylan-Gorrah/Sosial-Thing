@@ -40,6 +40,19 @@ export async function createRoom(_prev: unknown, formData: FormData) {
   redirect(`/rooms/${room.name}`);
 }
 
+export async function updateRoomIcon(roomId: string, iconUrl: string): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  // RLS (rooms_owner_update) already restricts this to the room's owner/admin
+  const { error } = await supabase.from("rooms").update({ icon_url: iconUrl }).eq("id", roomId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/rooms");
+  return { success: true };
+}
+
 export async function joinRoom(roomId: string): Promise<{ error?: string; success?: boolean }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

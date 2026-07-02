@@ -35,6 +35,17 @@ const SearchIcon = () => (
     <circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" />
   </svg>
 );
+const PlusIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+// Same normalization the server re-applies — just used here to dedupe against
+// what's already selected/typed before hitting the network.
+function slugify(raw: string) {
+  return raw.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
 
 // ── Format config ─────────────────────────────────────────────────────────────
 const FORMATS = [
@@ -90,6 +101,7 @@ export default function CreatePostModal({ open, onClose }: Props) {
   const [allTags, setAllTags]     = useState<Tag[]>([]);
   const [tagSearch, setTagSearch] = useState("");
   const [selected, setSelected]   = useState<Tag[]>([]);
+  const [newTags, setNewTags]     = useState<string[]>([]);
   const [isNsfw, setIsNsfw]       = useState(false);
   const [isSpoiler, setIsSpoiler] = useState(false);
   const [isOc, setIsOc]           = useState(false);
@@ -120,6 +132,7 @@ export default function CreatePostModal({ open, onClose }: Props) {
     formRef.current?.reset();
     setFormat("text");
     setSelected([]);
+    setNewTags([]);
     setTagSearch("");
     setIsNsfw(false);
     setIsSpoiler(false);
@@ -188,17 +201,37 @@ export default function CreatePostModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
+  const totalTagCount = selected.length + newTags.length;
+
   const visibleTags = allTags.filter(
     t => !selected.find(s => s.id === t.id) &&
          t.name.toLowerCase().includes(tagSearch.toLowerCase())
   );
 
+  const searchSlug = slugify(tagSearch);
+  const canCreateTag =
+    searchSlug.length > 0 &&
+    totalTagCount < 5 &&
+    !allTags.some(t => slugify(t.name) === searchSlug || t.slug === searchSlug) &&
+    !newTags.some(n => slugify(n) === searchSlug);
+
   function toggleTag(tag: Tag) {
     setSelected(prev => {
       if (prev.find(t => t.id === tag.id)) return prev.filter(t => t.id !== tag.id);
-      if (prev.length >= 5) return prev;
+      if (prev.length + newTags.length >= 5) return prev;
       return [...prev, tag];
     });
+  }
+
+  function createTag() {
+    const name = tagSearch.trim();
+    if (!canCreateTag) return;
+    setNewTags(prev => [...prev, name]);
+    setTagSearch("");
+  }
+
+  function removeNewTag(name: string) {
+    setNewTags(prev => prev.filter(n => n !== name));
   }
 
   return (
@@ -237,6 +270,7 @@ export default function CreatePostModal({ open, onClose }: Props) {
             {/* hidden fields */}
             <input type="hidden" name="format"     value={format} />
             <input type="hidden" name="tag_ids"    value={selected.map(t => t.id).join(",")} />
+            <input type="hidden" name="new_tags"   value={newTags.join(",")} />
             <input type="hidden" name="is_nsfw"    value={isNsfw    ? "1" : "0"} />
             <input type="hidden" name="is_spoiler" value={isSpoiler ? "1" : "0"} />
             <input type="hidden" name="is_oc"      value={isOc      ? "1" : "0"} />
@@ -417,11 +451,11 @@ export default function CreatePostModal({ open, onClose }: Props) {
             {/* ── Tag picker ── */}
             <div>
               <p className="text-[11px] tracking-[.08em] uppercase mb-2" style={{ color: "var(--color-text-3)" }}>
-                Tags {selected.length > 0 ? `(${selected.length}/5)` : "(up to 5)"}
+                Tags {totalTagCount > 0 ? `(${totalTagCount}/5)` : "(up to 5)"}
               </p>
 
-              {/* selected chips */}
-              {selected.length > 0 && (
+              {/* selected chips — existing tags + tags being created */}
+              {(selected.length > 0 || newTags.length > 0) && (
                 <div className="flex flex-wrap gap-[6px] mb-2">
                   {selected.map(tag => (
                     <button
@@ -437,11 +471,27 @@ export default function CreatePostModal({ open, onClose }: Props) {
                       </svg>
                     </button>
                   ))}
+                  {newTags.map(name => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => removeNewTag(name)}
+                      title="New tag — will be created with this post"
+                      className="flex items-center gap-1 px-[9px] py-[4px] rounded-full text-[11px] font-medium transition-all"
+                      style={{ background: "var(--color-accent)", color: "#fff", border: "1px dashed rgba(255,255,255,.6)" }}
+                    >
+                      {name}
+                      <span style={{ opacity: 0.75, fontWeight: 400 }}>new</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ))}
                 </div>
               )}
 
               {/* search */}
-              {selected.length < 5 && (
+              {totalTagCount < 5 && (
                 <div
                   className="flex items-center gap-2 px-3 py-2 rounded-[6px] mb-2"
                   style={{ background: "var(--color-panel-2)", border: "1px solid var(--color-line)" }}
@@ -451,16 +501,29 @@ export default function CreatePostModal({ open, onClose }: Props) {
                     type="text"
                     value={tagSearch}
                     onChange={e => setTagSearch(e.target.value)}
-                    placeholder="Search tags…"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && canCreateTag) { e.preventDefault(); createTag(); }
+                    }}
+                    placeholder="Search or create a tag…"
                     className="bg-transparent text-[13px] flex-1 outline-none"
                     style={{ color: "var(--color-text)" }}
                   />
                 </div>
               )}
 
-              {/* available chips */}
-              {selected.length < 5 && (
+              {/* available chips + create-new option */}
+              {totalTagCount < 5 && (
                 <div className="flex flex-wrap gap-[6px]">
+                  {canCreateTag && (
+                    <button
+                      type="button"
+                      onClick={createTag}
+                      className="flex items-center gap-1 px-[9px] py-[4px] rounded-full text-[11px] font-medium transition-all"
+                      style={{ background: "var(--color-accent-soft)", color: "var(--color-accent)", border: "1px dashed var(--color-accent)" }}
+                    >
+                      <PlusIcon /> Create &ldquo;{tagSearch.trim()}&rdquo;
+                    </button>
+                  )}
                   {visibleTags.slice(0, 20).map(tag => (
                     <button
                       key={tag.id}

@@ -91,6 +91,7 @@ export interface Room {
   id: string;
   name: string;
   description: string | null;
+  icon_url: string | null;
   type: RoomType;
   shareable_code: string | null;
   created_by: string;

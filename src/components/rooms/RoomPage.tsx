@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { joinRoom, leaveRoom } from "@/app/actions/rooms";
+import { joinRoom, leaveRoom, updateRoomIcon } from "@/app/actions/rooms";
 import { votePost } from "@/app/actions/posts";
 import PostCard from "@/components/feed/PostCard";
 import PostDetail from "@/components/feed/PostDetail";
@@ -12,6 +12,8 @@ import type { Post, Room } from "@/types";
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const UsersIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M15 8a3 3 0 0 1 0 6"/><path d="M3 20c1-3.5 3.5-5 6-5"/><path d="M15 15c2.5 0 5 1.5 6 5"/></svg>;
 const EmptyIcon  = () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>;
+const CameraIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+const SpinnerIcon = () => <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56" strokeLinecap="round"/></svg>;
 
 type Sort = "hot" | "new" | "top" | "rising";
 const SORTS: { value: Sort; label: string; icon: ReactNode }[] = [
@@ -52,12 +54,6 @@ const SORTS: { value: Sort; label: string; icon: ReactNode }[] = [
   },
 ];
 
-// Deterministic accent color per room name — same function as RoomsClient
-const ROOM_COLORS = ["#ff2e7e","#ff5630","#2ea44f","#388bfd","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
-function roomColor(name: string) {
-  return ROOM_COLORS[name.charCodeAt(0) % ROOM_COLORS.length];
-}
-
 interface Props {
   room: Room;
   isMember: boolean;
@@ -67,12 +63,39 @@ interface Props {
 
 export default function RoomPage({ room, isMember: initIsMember, isOwner, currentUserId }: Props) {
   const router  = useRouter();
-  const color   = roomColor(room.name);
 
   // Membership state — optimistic
   const [joined,      setJoined]      = useState(initIsMember);
   const [memberCount, setMemberCount] = useState(room.member_count);
   const [, startMemberTransition]     = useTransition();
+
+  // Icon — owner/admin can click the avatar to replace it
+  const [iconUrl,   setIconUrl]   = useState(room.icon_url);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleIconChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || uploading) return;
+    if (file.size > 5 * 1024 * 1024) return; // matches the room-icons bucket limit
+
+    setUploading(true);
+    const supabase = createClient();
+    const ext  = file.name.split(".").pop()?.toLowerCase() ?? "png";
+    const path = `${room.id}/${crypto.randomUUID()}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("room-icons")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+
+    if (!error && data) {
+      const { data: { publicUrl } } = supabase.storage.from("room-icons").getPublicUrl(data.path);
+      setIconUrl(publicUrl);
+      await updateRoomIcon(room.id, publicUrl);
+    }
+    setUploading(false);
+  }
 
   // Feed state
   const [sort,      setSort]      = useState<Sort>("hot");
@@ -170,16 +193,36 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
 
       {/* ── Room header ──────────────────────────────────────────────────────── */}
       <div style={{ borderBottom: "1px solid var(--color-line)", flexShrink: 0 }}>
-        {/* Accent stripe — same as the card on the browse page so the room feels consistent */}
-        <div style={{ height: 4, background: color }} />
-
         <div className="flex items-center gap-4 px-6 py-4">
-          {/* Room avatar */}
-          <div
-            className="grid place-items-center rounded-[9px] text-white font-bold flex-shrink-0"
-            style={{ width: 44, height: 44, background: color, fontSize: 18 }}
-          >
-            {room.name[0].toUpperCase()}
+          {/* Room avatar — owner/admin can hover + click to change it */}
+          <div className="relative flex-shrink-0" style={{ width: 44, height: 44 }}>
+            <div
+              className="grid place-items-center rounded-[9px] font-bold overflow-hidden"
+              style={{ width: 44, height: 44, background: "var(--color-panel-2)", color: "var(--color-text-2)", fontSize: 18 }}
+            >
+              {iconUrl ? (
+                <img src={iconUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              ) : (
+                room.name[0].toUpperCase()
+              )}
+            </div>
+            {isOwner && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Change room icon"
+                  disabled={uploading}
+                  className="absolute inset-0 grid place-items-center rounded-[9px] transition-opacity"
+                  style={{ background: "rgba(0,0,0,.55)", color: "#fff", opacity: uploading ? 1 : 0, cursor: "pointer" }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = "1"}
+                  onMouseLeave={e => { if (!uploading) (e.currentTarget as HTMLElement).style.opacity = "0"; }}
+                >
+                  {uploading ? <SpinnerIcon /> : <CameraIcon />}
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleIconChange} className="hidden" />
+              </>
+            )}
           </div>
 
           {/* Name + description */}
@@ -209,7 +252,7 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
               style={
                 joined
                   ? { background: "transparent", color: "var(--color-text-3)", border: "1px solid var(--color-line)", cursor: isOwner ? "default" : "pointer" }
-                  : { background: color, color: "#fff", border: `1px solid ${color}` }
+                  : { background: "var(--color-accent)", color: "#fff", border: "1px solid var(--color-accent)" }
               }
               title={isOwner ? "You own this room" : undefined}
             >

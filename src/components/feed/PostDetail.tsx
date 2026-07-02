@@ -8,6 +8,7 @@ import { followTag, unfollowTag } from "@/app/actions/tags";
 import Markdown from "@/components/shared/Markdown";
 import CommentSection from "@/components/feed/CommentSection";
 import { detectEmbed, VideoPlayer } from "@/components/shared/VideoEmbed";
+import { LinkEmbed } from "@/components/shared/LinkEmbed";
 import type { Post, PostFormat, Tag, PostImage } from "@/types";
 
 // ── Image carousel ────────────────────────────────────────────────────────────
@@ -270,20 +271,21 @@ export default function PostDetail({ post, onBack }: PostDetailProps) {
     );
   }
 
-  const sm      = post.showcase_meta;
-  const embed   = (post.format === "link" && post.link_url) ? detectEmbed(post.link_url) : null;
-  const images  = post.format === "media" ? (post.images ?? []) : [];
-  const hasMedia = embed !== null || images.length > 0;
+  const sm        = post.showcase_meta;
+  const embed     = (post.format === "link" && post.link_url) ? detectEmbed(post.link_url) : null;
+  const images    = post.format === "media" ? (post.images ?? []) : [];
+  const plainLink = post.format === "link" && !!post.link_url && !embed;
+  const hasMedia  = embed !== null || images.length > 0 || plainLink;
 
   return (
     <div className="h-full overflow-y-auto scroll" style={{ background: "var(--color-bg)", paddingTop: hasMedia ? 10 : 0 }}>
-      {/* Video gets a wider stage than the text column — ~30% bigger, testing how it reads */}
-      {embed && (
+      {/* Video / external link gets a wider stage than the text column — ~30% bigger */}
+      {(embed || plainLink) && (
         <div style={{ animation: "rise .22s ease both", maxWidth: 988, margin: "0 auto" }}>
-          <VideoPlayer embed={embed} />
+          {embed ? <VideoPlayer embed={embed} /> : <LinkEmbed url={post.link_url!} />}
         </div>
       )}
-      <div style={{ animation: embed ? undefined : "rise .22s ease both", maxWidth: 760, margin: "0 auto" }}>
+      <div style={{ animation: (embed || plainLink) ? undefined : "rise .22s ease both", maxWidth: 760, margin: "0 auto" }}>
 
         {/* ── Media at top — image carousel (video renders wider, above) ── */}
         {images.length > 0 && <ImageCarousel images={images} />}

@@ -61,9 +61,15 @@ export default function Rail({ open, onClose }: RailProps) {
   useEffect(() => {
     const sb = createClient();
     let channel: ReturnType<typeof sb.channel> | null = null;
+    // React Strict Mode (dev) mounts → cleans up → remounts. The cleanup below
+    // can run before this async chain reaches the `.channel()` call, so a stale
+    // "aborted" run would otherwise still create + subscribe a channel with the
+    // same topic name as the real one — and Supabase throws if `.on()` is called
+    // on a channel that's already subscribed. This flag lets the stale run bail.
+    let cancelled = false;
 
     sb.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
       setCurrentUserId(user.id);
 
       // Rooms
@@ -72,13 +78,14 @@ export default function Rail({ open, onClose }: RailProps) {
         .select("room:rooms(id, name)")
         .eq("user_id", user.id)
         .limit(20);
-      if (roomData) setUserRooms((roomData as any[]).map(m => m.room).filter(Boolean));
+      if (roomData && !cancelled) setUserRooms((roomData as any[]).map(m => m.room).filter(Boolean));
 
       // Unread count + streak
       const [{ count }, { data: prof }] = await Promise.all([
         sb.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
         sb.from("profiles").select("streak").eq("id", user.id).single(),
       ]);
+      if (cancelled) return;
       setUnreadCount(count ?? 0);
       if (prof) setStreak((prof as any).streak ?? 0);
 
@@ -95,7 +102,10 @@ export default function Rail({ open, onClose }: RailProps) {
         .subscribe();
     });
 
-    return () => { if (channel) sb.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (channel) sb.removeChannel(channel);
+    };
   }, []);
 
   // Close profile menu on outside click

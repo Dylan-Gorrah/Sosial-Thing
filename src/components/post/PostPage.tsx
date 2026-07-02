@@ -8,6 +8,7 @@ import { addComment } from "@/app/actions/comments";
 import { votePost   } from "@/app/actions/posts";
 import Markdown from "@/components/shared/Markdown";
 import { detectEmbed, VideoPlayer } from "@/components/shared/VideoEmbed";
+import { LinkEmbed } from "@/components/shared/LinkEmbed";
 import type { Post, Comment, PostFormat } from "@/types";
 
 // ── Avatar helpers ─────────────────────────────────────────────────────────────
@@ -232,20 +233,21 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
       return acc;
     }, {});
 
-  const sm    = post.showcase_meta;
-  const embed = (post.format === "link" && post.link_url) ? detectEmbed(post.link_url) : null;
+  const sm        = post.showcase_meta;
+  const embed     = (post.format === "link" && post.link_url) ? detectEmbed(post.link_url) : null;
+  const plainLink = post.format === "link" && !!post.link_url && !embed;
 
   return (
-    <div className="h-full overflow-y-auto scroll" style={{ background: "var(--color-bg)", paddingTop: embed ? 10 : 0 }}>
-      {/* Video gets a wider stage than the text column — ~30% bigger, testing how it reads */}
-      {embed && (
+    <div className="h-full overflow-y-auto scroll" style={{ background: "var(--color-bg)", paddingTop: (embed || plainLink) ? 10 : 0 }}>
+      {/* Video / external link gets a wider stage than the text column — ~30% bigger */}
+      {(embed || plainLink) && (
         <div style={{ maxWidth: 1040, margin: "0 auto" }}>
-          <VideoPlayer embed={embed} />
+          {embed ? <VideoPlayer embed={embed} /> : <LinkEmbed url={post.link_url!} />}
         </div>
       )}
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
 
-      <div style={{ padding: embed ? "24px 24px 80px" : "40px 24px 80px" }}>
+      <div style={{ padding: (embed || plainLink) ? "24px 24px 80px" : "40px 24px 80px" }}>
 
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="mb-6">

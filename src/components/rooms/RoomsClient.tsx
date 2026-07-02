@@ -6,12 +6,6 @@ import { joinRoom } from "@/app/actions/rooms";
 import CreateRoomModal from "./CreateRoomModal";
 import type { Room } from "@/types";
 
-// Consistent colour per room name first char — gives each room visual identity
-const ROOM_COLORS = ["#ff2e7e","#ff5630","#2ea44f","#388bfd","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
-function roomColor(name: string) {
-  return ROOM_COLORS[name.charCodeAt(0) % ROOM_COLORS.length];
-}
-
 const PlusIcon    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>;
 const UsersIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M15 8a3 3 0 0 1 0 6"/><path d="M3 20c1-3.5 3.5-5 6-5"/><path d="M15 15c2.5 0 5 1.5 6 5"/></svg>;
 const SearchIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>;
@@ -29,7 +23,6 @@ function RoomCard({
   const [joined,      setJoined]      = useState(isMember);
   const [memberCount, setMemberCount] = useState(room.member_count);
   const [, startTransition]           = useTransition();
-  const color = roomColor(room.name);
 
   function handleJoin(e: React.MouseEvent) {
     e.preventDefault(); // don't follow the card link
@@ -52,17 +45,18 @@ function RoomCard({
       href={`/rooms/${room.name}`}
       className="group flex flex-col rounded-[10px] overflow-hidden transition-all duration-[140ms]"
       style={{ background: "var(--color-panel)", border: "1px solid var(--color-line)" }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = color}
+      onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent)"}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = "var(--color-line)"}
     >
-      {/* Colour bar — gives each room a visual identity without a banner image */}
-      <div style={{ height: 5, background: color }} />
-
       <div className="p-5 flex flex-col gap-3 flex-1">
         {/* Icon + name row */}
         <div className="flex items-center gap-3">
-          <div className="grid place-items-center rounded-[8px] text-white font-bold flex-shrink-0" style={{ width: 38, height: 38, background: color, fontSize: 16 }}>
-            {room.name[0].toUpperCase()}
+          <div className="grid place-items-center rounded-[8px] font-bold flex-shrink-0 overflow-hidden" style={{ width: 38, height: 38, background: "var(--color-panel-2)", color: "var(--color-text-2)", fontSize: 16 }}>
+            {room.icon_url ? (
+              <img src={room.icon_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+            ) : (
+              room.name[0].toUpperCase()
+            )}
           </div>
           <div className="min-w-0">
             <h3 className="font-semibold leading-tight truncate m-0" style={{ fontSize: 15, color: "var(--color-text)" }}>
@@ -94,7 +88,7 @@ function RoomCard({
               style={
                 joined
                   ? { background: "transparent", color: "var(--color-text-3)", border: "1px solid var(--color-line)" }
-                  : { background: color, color: "#fff", border: `1px solid ${color}` }
+                  : { background: "var(--color-accent)", color: "#fff", border: "1px solid var(--color-accent)" }
               }
             >
               {joined ? "Joined" : "Join"}
