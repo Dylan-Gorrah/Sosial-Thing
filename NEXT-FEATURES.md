@@ -1,5 +1,15 @@
 # Next Features — instructions for Claude Code (round 2)
 
+> **STATUS UPDATE (July 10):** Item **2 (report system with room routing) is DONE** —
+> reports table + RPCs live, report buttons on posts/comments, /mod queue with
+> remove/ban actions, notifications. See `../Brain/Build Log - Reports and Moderation.md`.
+> Also fixed: vote-highlight bug (feed/room), a build-breaking type error in PostDetail,
+> and share now uses the native share sheet on phones. Everything is COMMITTED —
+> the uncommitted pile is gone; keep it that way.
+> Still open from this list: item **5 (project posts)** and the PostDetail
+> ImageCarousel cleanup (item 3 in the list below).
+> Manual step for Dylan: `update profiles set is_admin = true where username = '<you>';`
+
 > **STATUS UPDATE (July 5, later):** Items 1, 3, 4 and 6 are ALREADY IMPLEMENTED
 > (by Cowork Claude, directly in the working tree — uncommitted). Do NOT redo them.
 > Your jobs now, in order:
