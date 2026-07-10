@@ -14,8 +14,9 @@ const ArrowIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Results {
-  posts: { id: string; title: string; clout: number; format: string }[];
+  posts: { id: string; title: string; clout: number; format: string; verified: boolean }[];
   users: { id: string; username: string; display_name: string | null; avatar_url: string | null }[];
+  rooms: { id: string; name: string; member_count: number; icon_url: string | null }[];
   tags:  { id: string; name: string; slug: string }[];
 }
 
@@ -60,22 +61,25 @@ export default function SearchModal({ open, onClose }: Props) {
       setLoading(true);
       const sb  = createClient();
       const pat = `%${q}%`;
-      const [{ data: posts }, { data: users }, { data: tags }] = await Promise.all([
-        sb.from("posts")
-          .select("id, title, clout, format")
-          .or(`title.ilike.${pat},body_md.ilike.${pat}`)
-          .limit(5),
+      const [{ data: posts }, { data: users }, { data: rooms }, { data: tags }] = await Promise.all([
+        sb.rpc("search_posts", { p_query: q, p_limit: 5 }),
         sb.from("profiles")
           .select("id, username, display_name, avatar_url")
           .or(`username.ilike.${pat},display_name.ilike.${pat}`)
+          .order("clout_score", { ascending: false })
           .limit(4),
+        sb.from("rooms")
+          .select("id, name, member_count, icon_url")
+          .or(`name.ilike.${pat},description.ilike.${pat}`)
+          .order("member_count", { ascending: false })
+          .limit(3),
         sb.from("tags")
           .select("id, name, slug")
           .ilike("name", pat)
           .eq("status", "active")
           .limit(6),
       ]);
-      setResults({ posts: posts ?? [], users: users ?? [], tags: tags ?? [] });
+      setResults({ posts: posts ?? [], users: users ?? [], rooms: rooms ?? [], tags: tags ?? [] });
       setLoading(false);
     }, 260);
 
@@ -85,7 +89,7 @@ export default function SearchModal({ open, onClose }: Props) {
   if (!open) return null;
 
   const trimmed   = query.trim();
-  const hasAny    = results && (results.posts.length + results.users.length + results.tags.length) > 0;
+  const hasAny    = results && (results.posts.length + results.users.length + results.rooms.length + results.tags.length) > 0;
   const showEmpty = trimmed && !loading && results && !hasAny;
 
   return (
@@ -113,7 +117,7 @@ export default function SearchModal({ open, onClose }: Props) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search posts, people, tags…"
+            placeholder="Search posts, people, rooms, tags…"
             className="flex-1 bg-transparent outline-none"
             style={{ fontSize: 14.5, color: "var(--color-text)" }}
           />
@@ -164,6 +168,11 @@ export default function SearchModal({ open, onClose }: Props) {
                   >
                     <PostIcon />
                     <span className="flex-1 text-[13.5px] truncate">{p.title}</span>
+                    {p.verified && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3fb970" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z" /><path d="M9 12l2 2 4-4" />
+                      </svg>
+                    )}
                     <span className="text-[11px] tabular-nums font-semibold" style={{ color: "var(--color-accent)" }}>{p.clout.toLocaleString()}</span>
                   </Link>
                 ))}
@@ -190,6 +199,36 @@ export default function SearchModal({ open, onClose }: Props) {
                     }
                     <span className="flex-1 text-[13.5px] truncate">{u.display_name ?? u.username}</span>
                     <span className="text-[11px]" style={{ color: "var(--color-text-3)" }}>@{u.username}</span>
+                  </Link>
+                ))}
+              </section>
+            )}
+
+            {/* Rooms */}
+            {(results?.rooms.length ?? 0) > 0 && (
+              <section>
+                <p className="px-4 pt-3 pb-1 text-[10px] tracking-[.08em] uppercase" style={{ color: "var(--color-text-3)" }}>Rooms</p>
+                {results!.rooms.map(r => (
+                  <Link
+                    key={r.id}
+                    href={`/rooms/${r.name}`}
+                    onClick={onClose}
+                    className="flex items-center gap-3 px-4 py-[10px] transition-colors"
+                    style={{ color: "var(--color-text)", textDecoration: "none" }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "var(--color-panel-2)"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+                  >
+                    {r.icon_url
+                      ? <img src={r.icon_url} alt="" className="rounded-[6px] flex-shrink-0" style={{ width: 24, height: 24, objectFit: "cover" }} />
+                      : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: "var(--color-text-3)" }}>
+                          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                        </svg>
+                      )
+                    }
+                    <span className="flex-1 text-[13.5px] truncate">{r.name}</span>
+                    <span className="text-[11px]" style={{ color: "var(--color-text-3)" }}>{r.member_count} member{r.member_count === 1 ? "" : "s"}</span>
                   </Link>
                 ))}
               </section>
@@ -236,7 +275,7 @@ export default function SearchModal({ open, onClose }: Props) {
         {/* Empty-state hint when nothing typed yet */}
         {!trimmed && (
           <div className="py-6 text-center text-[13px]" style={{ color: "var(--color-text-3)" }}>
-            Type to search posts, people, and tags
+            Type to search posts, people, rooms, and tags
             <div className="mt-2 text-[11px] tracking-[.06em] uppercase" style={{ opacity: 0.5 }}>Press Enter to see all results</div>
           </div>
         )}

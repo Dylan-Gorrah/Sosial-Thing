@@ -17,6 +17,7 @@ const HomeIcon    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="
 const RoomsIcon   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 9.5h16"/></svg>;
 const ExploreIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m15 9-2 5-4 1 2-5 4-1z" fill="currentColor" stroke="none"/></svg>;
 const SearchIcon  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>;
+const TrophyIcon  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 2 4 4 4"/><path d="M17 6h3a1 1 0 0 1 1 1c0 2.5-2 4-4 4"/></svg>;
 const ComposeIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>;
 const ProfileIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1.2-3.5 4-5 7-5s5.8 1.5 7 5"/></svg>;
 const BackIcon    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7"/></svg>;
@@ -329,6 +330,20 @@ export default function Rail({ open, onClose }: RailProps) {
         {accentDot(pathname === "/explore")}
         <span className="flex-shrink-0"><ExploreIcon /></span>
         {label("Explore")}
+      </Link>
+
+      {/* ── Leaderboard ── */}
+      <Link
+        href="/leaderboard"
+        title="Leaderboard"
+        onClick={onClose}
+        style={itemBase(pathname === "/leaderboard")}
+        onMouseEnter={e => onHover(e, pathname === "/leaderboard", true)}
+        onMouseLeave={e => onHover(e, pathname === "/leaderboard", false)}
+      >
+        {accentDot(pathname === "/leaderboard")}
+        <span className="flex-shrink-0"><TrophyIcon /></span>
+        {label("Leaderboard")}
       </Link>
 
       {/* ── Search ── */}

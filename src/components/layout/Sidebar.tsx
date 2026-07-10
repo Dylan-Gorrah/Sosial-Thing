@@ -1,5 +1,7 @@
 "use client";
 
+import TopContributors from "@/components/leaderboard/TopContributors";
+
 export default function Sidebar({ open }: { open: boolean }) {
   return (
     <div
@@ -32,6 +34,9 @@ export default function Sidebar({ open }: { open: boolean }) {
           + New Post
         </button>
       </div>
+
+      {/* Top contributors — weekly, global */}
+      <TopContributors />
 
       {/* Trending tags slot */}
       <div className="p-4">

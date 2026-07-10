@@ -5,10 +5,16 @@ import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { addComment } from "@/app/actions/comments";
-import { votePost   } from "@/app/actions/posts";
+import { votePost, editPost, deletePost } from "@/app/actions/posts";
 import Markdown from "@/components/shared/Markdown";
 import { detectEmbed, VideoPlayer } from "@/components/shared/VideoEmbed";
 import { LinkEmbed } from "@/components/shared/LinkEmbed";
+import VerifyControls, { VerifiedChip, SlopChip } from "@/components/post/VerifyControls";
+import SaveButton from "@/components/shared/SaveButton";
+import ImageCarousel from "@/components/shared/ImageCarousel";
+import DemoPreview from "@/components/shared/DemoPreview";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import ReportModal from "@/components/shared/ReportModal";
 import type { Post, Comment, PostFormat } from "@/types";
 
 // ── Avatar helpers ─────────────────────────────────────────────────────────────
@@ -45,10 +51,13 @@ const UpIcon      = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="
 const DownIcon    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m6 10 6 6 6-6"/></svg>;
 const SaveIcon    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M6 4h12v16l-6-4-6 4z"/></svg>;
 const ShareIcon   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="19" r="2"/><path d="m8 11 8-5M8 13l8 5"/></svg>;
+const FlagIcon    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
 const CommentIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"><path d="M5 5h14v11H9l-4 3z"/></svg>;
 const LinkIcon    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
 const HeartIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>;
 const ReplyIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>;
+const EditIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>;
+const TrashIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>;
 
 // ── Comment form ──────────────────────────────────────────────────────────────
 function SubmitBtn({ label }: { label: string }) {
@@ -97,11 +106,13 @@ function CommentForm({ postId, parentId, onSuccess, placeholder = "Write a comme
 }
 
 // ── Comment row ───────────────────────────────────────────────────────────────
-function CommentRow({ comment, replies, postId, onRefresh }: {
-  comment: Comment; replies: Comment[]; postId: string; onRefresh: () => void;
+function CommentRow({ comment, replies, postId, currentUserId, onRefresh }: {
+  comment: Comment; replies: Comment[]; postId: string; currentUserId: string | null; onRefresh: () => void;
 }) {
   const [replyOpen, setReplyOpen] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const username = comment.author?.username ?? "unknown";
+  const ownComment = !!currentUserId && currentUserId === comment.user_id;
 
   return (
     <div className="flex gap-3">
@@ -141,7 +152,21 @@ function CommentRow({ comment, replies, postId, onRefresh }: {
           >
             <ReplyIcon /> Reply
           </button>
+          {currentUserId && !ownComment && (
+            <button
+              onClick={() => setReporting(true)}
+              className="text-[11px] tracking-[.04em] transition-colors"
+              style={{ color: "var(--color-text-3)" }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--color-ember)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"}
+              title="Report this comment"
+            >
+              Report
+            </button>
+          )}
         </div>
+
+        <ReportModal open={reporting} onClose={() => setReporting(false)} commentId={comment.id} />
 
         {replyOpen && (
           <div className="mb-4">
@@ -199,6 +224,58 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
   const [, startVoteTransition]     = useTransition();
   const [copied, setCopied]         = useState(false);
 
+  // ── Owner edit / delete ──────────────────────────────────────────────────
+  const isOwner    = !!currentUserId && currentUserId === post.user_id;
+  const withinEditWindow =
+    Date.now() - new Date(post.created_at).getTime() < 24 * 60 * 60 * 1000;
+  const canEdit    = isOwner && withinEditWindow;
+
+  const [editing,   setEditing]   = useState(false);
+  const [editTitle, setEditTitle] = useState(post.title);
+  const [editBody,  setEditBody]  = useState(post.body_md ?? "");
+  const [editErr,   setEditErr]   = useState<string | null>(null);
+  const [saving,    startSave]    = useTransition();
+  const [deleting,  startDelete]  = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reportOpen, setReportOpen]   = useState(false);
+  const [deleteErr,   setDeleteErr]   = useState<string | null>(null);
+
+  function openEditor() {
+    setEditTitle(post.title);
+    setEditBody(post.body_md ?? "");
+    setEditErr(null);
+    setEditing(true);
+  }
+
+  function saveEdit() {
+    setEditErr(null);
+    startSave(async () => {
+      const res = await editPost(post.id, {
+        title:   editTitle,
+        body_md: editBody.trim() ? editBody : null,
+      });
+      if (res.error) { setEditErr(res.error); return; }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    setDeleteErr(null);
+    setConfirmOpen(true);
+  }
+
+  function confirmDelete() {
+    setDeleteErr(null);
+    startDelete(async () => {
+      const res = await deletePost(post.id);
+      if (res.error) { setDeleteErr(res.error); return; }
+      setConfirmOpen(false);
+      router.push("/feed");
+      router.refresh();
+    });
+  }
+
   function handleVote(direction: 1 | -1) {
     if (!currentUserId) return;
     const dir      = direction === 1 ? "up" : "down";
@@ -219,6 +296,11 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
   }
 
   function handleShare() {
+    // Phones get the native share sheet; desktop falls back to copying
+    if (typeof navigator.share === "function") {
+      navigator.share({ title: post.title, url: window.location.href }).catch(() => {});
+      return;
+    }
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -234,15 +316,27 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
     }, {});
 
   const sm        = post.showcase_meta;
-  const embed     = (post.format === "link" && post.link_url) ? detectEmbed(post.link_url) : null;
+  // Posts are content-first now: a showcase can carry a video link too, so the
+  // embed check runs for both link and showcase formats.
+  const embed     = ((post.format === "link" || post.format === "showcase") && post.link_url)
+    ? detectEmbed(post.link_url) : null;
   const plainLink = post.format === "link" && !!post.link_url && !embed;
+  const gallery   = post.images ?? [];
 
   return (
-    <div className="h-full overflow-y-auto scroll" style={{ background: "var(--color-bg)", paddingTop: (embed || plainLink) ? 10 : 0 }}>
+    <>
+    <div className="h-full overflow-y-auto scroll" style={{ background: "var(--color-bg)", paddingTop: (embed || plainLink || gallery.length > 0) ? 10 : 0 }}>
       {/* Video / external link gets a wider stage than the text column — ~30% bigger */}
       {(embed || plainLink) && (
         <div style={{ maxWidth: 1040, margin: "0 auto" }}>
           {embed ? <VideoPlayer embed={embed} /> : <LinkEmbed url={post.link_url!} />}
+        </div>
+      )}
+      {/* Image gallery — any post can carry one now. This page previously never
+          rendered galleries at all; only the feed's reader pane did. */}
+      {gallery.length > 0 && (
+        <div style={{ maxWidth: 1040, margin: embed || plainLink ? "10px auto 0" : "0 auto" }}>
+          <ImageCarousel images={gallery} />
         </div>
       )}
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
@@ -255,6 +349,11 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
             <span className="text-[9.5px] tracking-[.1em] uppercase px-[7px] py-[3px] rounded-[3px] font-semibold" style={formatStyle(post.format)}>
               {post.format}
             </span>
+            {post.is_event && (
+              <span className="text-[9.5px] tracking-[.1em] uppercase px-[7px] py-[3px] rounded-[3px] font-semibold" style={{ background: "rgba(46,164,79,.16)", color: "#3fb950" }}>
+                Event{post.event_starts_at ? ` · ${new Date(post.event_starts_at).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" })} ${new Date(post.event_starts_at).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}` : ""}
+              </span>
+            )}
             {(post.tags ?? []).map(t => (
               <span key={t.id} className="text-[9.5px] tracking-[.09em] uppercase px-[7px] py-[3px] rounded-[3px]" style={{ background: "rgba(255,255,255,.06)", color: "var(--color-text-3)" }}>
                 {t.name}
@@ -262,13 +361,26 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
             ))}
             {post.is_nsfw && <span className="text-[9.5px] tracking-[.09em] uppercase px-[7px] py-[3px] rounded-[3px]" style={{ background: "rgba(255,86,48,.2)", color: "var(--color-ember)" }}>NSFW</span>}
             {post.is_oc   && <span className="text-[9.5px] tracking-[.09em] uppercase px-[7px] py-[3px] rounded-[3px]" style={{ background: "rgba(56,139,253,.18)", color: "#58a6ff" }}>OC</span>}
+            {post.verified && <VerifiedChip />}
+            {post.slop_status === "flagged" && <SlopChip />}
           </div>
 
           {/* Font-weight light on the title creates hierarchy against the bolder
               action bar and comment text below it */}
-          <h1 className="font-light leading-[1.2] mt-0 mb-4" style={{ fontSize: 30, letterSpacing: "-.012em", color: "var(--color-text)", maxWidth: "28ch" }}>
-            {post.title}
-          </h1>
+          {editing ? (
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              maxLength={300}
+              autoFocus
+              className="w-full font-light leading-[1.2] mt-0 mb-4 bg-transparent outline-none"
+              style={{ fontSize: 30, letterSpacing: "-.012em", color: "var(--color-text)", borderBottom: "1px solid var(--color-line)", paddingBottom: 6 }}
+            />
+          ) : (
+            <h1 className="font-light leading-[1.2] mt-0 mb-4" style={{ fontSize: 30, letterSpacing: "-.012em", color: "var(--color-text)", maxWidth: "28ch" }}>
+              {post.title}
+            </h1>
+          )}
 
           <div className="flex items-center gap-[10px]">
             <Link href={`/u/${post.author?.username ?? ""}`} className="flex-shrink-0">
@@ -286,6 +398,7 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
               <span className="text-[11px]" style={{ color: "var(--color-text-3)" }}>
                 {post.author?.title && <>{post.author.title} &nbsp;·&nbsp; </>}
                 {timeAgo(post.created_at)}
+                {post.edited_at && <span title={`Edited ${timeAgo(post.edited_at)}`}> &nbsp;·&nbsp; edited</span>}
               </span>
             </div>
           </div>
@@ -329,8 +442,49 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
             </div>
           )}
 
+          {/* Live demo runs right in the post when it's on a trusted host
+              (GitHub Pages, Vercel, Netlify, Cloudflare) — click to load */}
+          {post.format === "showcase" && sm?.demo_url && (
+            <DemoPreview url={sm.demo_url} />
+          )}
+
           {/* Body as markdown — developers expect code blocks to work */}
-          {post.body_md && <Markdown prose>{post.body_md}</Markdown>}
+          {editing ? (
+            <>
+              <textarea
+                value={editBody}
+                onChange={e => setEditBody(e.target.value)}
+                rows={10}
+                maxLength={20000}
+                placeholder="Write your post… (Markdown supported)"
+                className="w-full rounded-[8px] px-3 py-[10px] text-[13.5px] leading-[1.6] resize-y outline-none transition-all font-mono"
+                style={{ background: "var(--color-panel-2)", border: "1px solid var(--color-line)", color: "var(--color-text)" }}
+                onFocus={e => (e.currentTarget.style.borderColor = "var(--color-accent)")}
+                onBlur={e  => (e.currentTarget.style.borderColor = "var(--color-line)")}
+              />
+              {editErr && <p className="text-[12.5px] mt-2 mb-0" style={{ color: "var(--color-ember)" }}>{editErr}</p>}
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={saveEdit}
+                  disabled={saving}
+                  className="px-4 py-[7px] rounded-[6px] text-[12.5px] font-semibold text-white transition-all"
+                  style={{ background: "var(--color-accent)", opacity: saving ? 0.7 : 1 }}
+                >
+                  {saving ? "Saving…" : "Save changes"}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  className="px-4 py-[7px] rounded-[6px] text-[12.5px] font-medium transition-all"
+                  style={{ border: "1px solid var(--color-line)", color: "var(--color-text-2)" }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            post.body_md && <Markdown prose>{post.body_md}</Markdown>
+          )}
         </div>
 
         {/* ── Actions bar ────────────────────────────────────────────────────── */}
@@ -374,15 +528,7 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
             <CommentIcon /> {post.comment_count.toLocaleString()} comments
           </a>
 
-          {currentUserId && (
-            <button className="flex items-center gap-[6px] px-3 py-[6px] rounded-[6px] text-[12.5px] tracking-[.04em] transition-all" title="Save (Phase 2)"
-              style={{ color: "var(--color-text-3)", border: "1px solid transparent" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-line)"; (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"; }}
-            >
-              <SaveIcon /> Save
-            </button>
-          )}
+          {currentUserId && <SaveButton postId={post.id} variant="pill" />}
 
           <button onClick={handleShare}
             className="flex items-center gap-[6px] px-3 py-[6px] rounded-[6px] text-[12.5px] tracking-[.04em] transition-all"
@@ -392,6 +538,52 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
           >
             <ShareIcon /> {copied ? "Copied!" : "Share"}
           </button>
+
+          {/* Report — signed-in non-owners only */}
+          {currentUserId && !isOwner && (
+            <button onClick={() => setReportOpen(true)}
+              className="flex items-center gap-[6px] px-3 py-[6px] rounded-[6px] text-[12.5px] tracking-[.04em] transition-all"
+              style={{ color: "var(--color-text-3)", border: "1px solid transparent" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-ember)"; (e.currentTarget as HTMLElement).style.color = "var(--color-ember)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"; }}
+              title="Report this post"
+            >
+              <FlagIcon /> Report
+            </button>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Owner controls — edit is time-boxed to 24h, delete is always allowed */}
+          {isOwner && !editing && (
+            <>
+              {canEdit && (
+                <button
+                  onClick={openEditor}
+                  className="flex items-center gap-[6px] px-3 py-[6px] rounded-[6px] text-[12.5px] tracking-[.04em] transition-all"
+                  style={{ color: "var(--color-text-3)", border: "1px solid transparent" }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-line)"; (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"; }}
+                  title="Edit this post (allowed for 24h after posting)"
+                >
+                  <EditIcon /> Edit
+                </button>
+              )}
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-[6px] px-3 py-[6px] rounded-[6px] text-[12.5px] tracking-[.04em] transition-all"
+                style={{ color: "var(--color-text-3)", border: "1px solid transparent" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--color-ember)"; (e.currentTarget as HTMLElement).style.color = "var(--color-ember)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"; }}
+                title="Delete this post"
+              >
+                <TrashIcon /> {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </>
+          )}
+
+          <VerifyControls post={post} onVerified={() => router.refresh()} />
         </div>
 
         {/* ── Comments ───────────────────────────────────────────────────────── */}
@@ -416,7 +608,7 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
           {topLevel.length > 0 ? (
             <div className="flex flex-col gap-6">
               {topLevel.map(c => (
-                <CommentRow key={c.id} comment={c} replies={repliesByParent[c.id] ?? []} postId={post.id} onRefresh={() => router.refresh()} />
+                <CommentRow key={c.id} comment={c} replies={repliesByParent[c.id] ?? []} postId={post.id} currentUserId={currentUserId} onRefresh={() => router.refresh()} />
               ))}
             </div>
           ) : (
@@ -427,5 +619,21 @@ export default function PostPage({ post, comments, currentUserId, initialVote }:
       </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      open={confirmOpen}
+      tone="danger"
+      title="Delete this post?"
+      message="This permanently removes your post and its comments. This can't be undone."
+      confirmLabel="Delete post"
+      busyLabel="Deleting…"
+      busy={deleting}
+      error={deleteErr}
+      onConfirm={confirmDelete}
+      onCancel={() => { if (!deleting) setConfirmOpen(false); }}
+    />
+
+    <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} postId={post.id} />
+    </>
   );
 }

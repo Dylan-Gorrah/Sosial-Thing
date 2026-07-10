@@ -25,7 +25,11 @@ export async function login(_prev: unknown, formData: FormData) {
 
   if (error) return { error: "Wrong username or password." };
 
-  redirect("/feed");
+  // Return to where they were headed (e.g. an invite link), but only ever to a
+  // relative in-app path — never an absolute URL, to avoid open-redirects.
+  const next = (formData.get("next") as string | null) ?? "";
+  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/feed";
+  redirect(safeNext);
 }
 
 export async function register(_prev: unknown, formData: FormData) {

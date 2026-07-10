@@ -22,6 +22,8 @@ interface Notif {
 const FollowIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 11l2 2 4-4"/></svg>;
 const CommentIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M5 5h14v11H9l-4 3z"/></svg>;
 const BadgeIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>;
+const ShieldIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>;
+const FlagIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V4"/><path d="M4 4h12l-2 4 2 4H4"/></svg>;
 const EmptyIcon   = () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
 
 function timeAgo(date: string) {
@@ -52,6 +54,22 @@ function NotifIcon({ type, badgeTier }: { type: string; badgeTier?: string }) {
       </div>
     );
   }
+  if (type === "post_verified") {
+    return (
+      <div className="flex items-center justify-center flex-shrink-0"
+        style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(63,185,112,.13)", color: "#3fb970" }}>
+        <ShieldIcon />
+      </div>
+    );
+  }
+  if (type === "post_slop_flagged" || type === "report_filed") {
+    return (
+      <div className="flex items-center justify-center flex-shrink-0"
+        style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(255,86,48,.14)", color: "var(--color-ember)" }}>
+        <FlagIcon />
+      </div>
+    );
+  }
   const color = type === "new_follower" ? "var(--color-accent)" : "var(--color-blue)";
   return (
     <div className="flex items-center justify-center flex-shrink-0"
@@ -63,7 +81,9 @@ function NotifIcon({ type, badgeTier }: { type: string; badgeTier?: string }) {
 
 function NotifRow({ notif }: { notif: Notif }) {
   const actor = notif.actor?.display_name ?? notif.actor?.username ?? "Someone";
-  const href  = notif.post_id ? `/post/${notif.post_id}` : notif.actor ? `/u/${notif.actor.username}` : "#";
+  // Reports land in the mod queue, everything else goes to the post/profile
+  const href  = notif.type === "report_filed" ? "/mod"
+    : notif.post_id ? `/post/${notif.post_id}` : notif.actor ? `/u/${notif.actor.username}` : "#";
 
   let message: React.ReactNode;
   if (notif.type === "new_follower") {
@@ -106,6 +126,27 @@ function NotifRow({ notif }: { notif: Notif }) {
         <span style={{ color: "var(--color-text-2)" }}>You earned the </span>
         <span className="font-semibold" style={{ color: "var(--color-text)" }}>{notif.badge?.name ?? "badge"}</span>
         <span style={{ color: "var(--color-text-2)" }}> badge</span>
+      </>
+    );
+  } else if (notif.type === "post_verified") {
+    message = (
+      <>
+        <span style={{ color: "var(--color-text-2)" }}>The community </span>
+        <span className="font-semibold" style={{ color: "#3fb970" }}>verified</span>
+        <span style={{ color: "var(--color-text-2)" }}> your post{notif.post ? ` "${notif.post.title}"` : ""} — +25 clout</span>
+      </>
+    );
+  } else if (notif.type === "post_slop_flagged") {
+    message = (
+      <>
+        <span style={{ color: "var(--color-text-2)" }}>Your post{notif.post ? ` "${notif.post.title}"` : ""} was flagged as low-effort by the community. It earns no clout until it gets verified.</span>
+      </>
+    );
+  } else if (notif.type === "report_filed") {
+    message = (
+      <>
+        <span style={{ color: "var(--color-text-2)" }}>Something you moderate was reported{notif.post ? ` — "${notif.post.title}"` : ""}. </span>
+        <span className="font-semibold" style={{ color: "var(--color-ember)" }}>Review it</span>
       </>
     );
   } else {

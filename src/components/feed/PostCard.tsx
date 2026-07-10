@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { votePost, toggleBookmark } from "@/app/actions/posts";
 import { getYoutubeId } from "@/components/shared/VideoEmbed";
+import { VerifiedChip, SlopChip } from "@/components/post/VerifyControls";
 import type { Post } from "@/types";
 
 const UpIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 14 6-6 6 6"/></svg>;
@@ -36,9 +37,10 @@ export default function PostCard({ post, active, userVote, isBookmarked = false,
   const [localSaved,    setLocalSaved]    = useState(isBookmarked);
   const [, startTransition]               = useTransition();
 
-  const ytId      = post.format === "link" && post.link_url ? getYoutubeId(post.link_url) : null;
-  const firstImg  = post.format === "media" ? (post.images ?? [])[0] : null;
-  const imgCount  = post.format === "media" ? (post.images ?? []).length : 0;
+  // Content-first posts: showcases can carry a video, any post can carry images
+  const ytId      = (post.format === "link" || post.format === "showcase") && post.link_url ? getYoutubeId(post.link_url) : null;
+  const firstImg  = (post.images ?? [])[0] ?? null;
+  const imgCount  = (post.images ?? []).length;
 
   function handleVote(e: React.MouseEvent, direction: 1 | -1) {
     e.stopPropagation();
@@ -136,8 +138,10 @@ export default function PostCard({ post, active, userVote, isBookmarked = false,
       </div>
 
       {/* Flair chips — youtube / tags / flags */}
-      {(ytId || firstImg || (post.tags?.length ?? 0) > 0 || post.is_nsfw || post.is_oc) && (
+      {(ytId || firstImg || (post.tags?.length ?? 0) > 0 || post.is_nsfw || post.is_oc || post.verified || post.slop_status === "flagged") && (
         <div className="flex flex-wrap gap-[5px] mb-[10px]">
+          {post.verified && <VerifiedChip small />}
+          {post.slop_status === "flagged" && <SlopChip small />}
           {ytId && (
             <span className="text-[9px] tracking-[.07em] uppercase px-[6px] py-[2px] rounded-[3px]" style={{ background: "rgba(255,0,0,.15)", color: "#ff4444" }}>
               YouTube

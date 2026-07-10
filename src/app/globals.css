@@ -70,6 +70,17 @@ body {
   to   { clip-path: circle(150% at 50% 30%); opacity: 1; }
 }
 
+/* Confirmation dialog — backdrop fade + card pop */
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes dialogPop {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 /* ===== Floating label inputs ===== */
 .field { position: relative; margin-bottom: 16px; }
 .field input {

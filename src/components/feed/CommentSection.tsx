@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { addComment } from "@/app/actions/comments";
+import { voteComment } from "@/app/actions/clout";
+import ReportModal from "@/components/shared/ReportModal";
 import type { Comment } from "@/types";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -145,12 +147,38 @@ interface CommentRowProps {
   depth:         number;
   postId:        string;
   currentUserId: string | null;
+  likedSet:      Set<string>;
   onAddReply:    (parentId: string, c: Comment) => void;
 }
 
-function CommentRow({ node, depth, postId, currentUserId, onAddReply }: CommentRowProps) {
+function CommentRow({ node, depth, postId, currentUserId, likedSet, onAddReply }: CommentRowProps) {
+  const liked = likedSet.has(node.id);
   const [replying,    setReplying]    = useState(false);
+  const [reporting,   setReporting]   = useState(false);
   const [localLikes,  setLocalLikes]  = useState(node.like_count);
+  const [localLiked,  setLocalLiked]  = useState(liked);
+  const [, startTransition]           = useTransition();
+
+  useEffect(() => { setLocalLiked(liked); }, [liked]);
+
+  const ownComment = currentUserId === node.user_id;
+
+  function toggleLike() {
+    if (!currentUserId || ownComment) return;
+    const next = !localLiked;
+    setLocalLiked(next);
+    setLocalLikes(l => l + (next ? 1 : -1));
+    startTransition(async () => {
+      const res = await voteComment(node.id);
+      if (res.error) {
+        setLocalLiked(!next);
+        setLocalLikes(l => l + (next ? -1 : 1));
+      } else if (typeof res.like_count === "number") {
+        setLocalLikes(res.like_count);
+        setLocalLiked(!!res.liked);
+      }
+    });
+  }
 
   return (
     <div
@@ -187,11 +215,17 @@ function CommentRow({ node, depth, postId, currentUserId, onAddReply }: CommentR
       {/* Actions */}
       <div className="flex items-center gap-[10px] mb-3">
         <button
-          onClick={() => setLocalLikes(l => l + 1)}
+          onClick={toggleLike}
+          title={ownComment ? "Your comment" : localLiked ? "Unlike" : "Like"}
           className="flex items-center gap-[4px] transition-colors"
-          style={{ fontSize: 11, color: "var(--color-text-3)" }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--color-accent)"}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"}
+          style={{
+            fontSize: 11,
+            color:  localLiked ? "var(--color-accent)" : "var(--color-text-3)",
+            cursor: ownComment || !currentUserId ? "default" : "pointer",
+            opacity: ownComment ? 0.55 : 1,
+          }}
+          onMouseEnter={e => { if (!localLiked && !ownComment && currentUserId) (e.currentTarget as HTMLElement).style.color = "var(--color-accent)"; }}
+          onMouseLeave={e => { if (!localLiked) (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"; }}
         >
           <UpIcon />
           <span>{localLikes > 0 ? localLikes : ""}</span>
@@ -208,7 +242,22 @@ function CommentRow({ node, depth, postId, currentUserId, onAddReply }: CommentR
             <ReplyIcon /> Reply
           </button>
         )}
+
+        {currentUserId && !ownComment && (
+          <button
+            onClick={() => setReporting(true)}
+            className="transition-colors uppercase tracking-[.05em]"
+            style={{ fontSize: 10.5, color: "var(--color-text-3)" }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--color-ember)"}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--color-text-3)"}
+            title="Report this comment"
+          >
+            Report
+          </button>
+        )}
       </div>
+
+      <ReportModal open={reporting} onClose={() => setReporting(false)} commentId={node.id} />
 
       {/* Inline reply box */}
       {replying && (
@@ -232,6 +281,7 @@ function CommentRow({ node, depth, postId, currentUserId, onAddReply }: CommentR
           depth={depth + 1}
           postId={postId}
           currentUserId={currentUserId}
+          likedSet={likedSet}
           onAddReply={onAddReply}
         />
       ))}
@@ -249,6 +299,7 @@ export default function CommentSection({ postId, commentCount }: CommentSectionP
   const [roots,         setRoots]         = useState<CommentNode[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [likedSet,      setLikedSet]      = useState<Set<string>>(new Set());
 
   // Resolve viewer
   useEffect(() => {
@@ -257,18 +308,30 @@ export default function CommentSection({ postId, commentCount }: CommentSectionP
     });
   }, []);
 
-  // Fetch comments
+  // Fetch comments + which ones the viewer already liked
   useEffect(() => {
     setLoading(true);
-    createClient()
-      .from("comments")
+    const sb = createClient();
+    sb.from("comments")
       .select("*, author:profiles(id, username, display_name, avatar_url, clout_tier)")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(200)
-      .then(({ data }) => {
-        setRoots(buildTree((data ?? []) as Comment[]));
+      .then(async ({ data }) => {
+        const comments = (data ?? []) as Comment[];
+        setRoots(buildTree(comments));
         setLoading(false);
+        if (comments.length > 0) {
+          const { data: { user } } = await sb.auth.getUser();
+          if (user) {
+            const { data: likes } = await sb
+              .from("comment_likes")
+              .select("comment_id")
+              .eq("user_id", user.id)
+              .in("comment_id", comments.map(c => c.id));
+            setLikedSet(new Set((likes ?? []).map((l: any) => l.comment_id)));
+          }
+        }
       });
   }, [postId]);
 
@@ -324,6 +387,7 @@ export default function CommentSection({ postId, commentCount }: CommentSectionP
           depth={0}
           postId={postId}
           currentUserId={currentUserId}
+          likedSet={likedSet}
           onAddReply={handleReply}
         />
       ))}

@@ -160,10 +160,11 @@ export default function FeedPage() {
     `;
 
     function withSort(q: any) {
-      if (sort === "hot")    return q.gte("created_at", day7).order("clout",      { ascending: false });
+      // Slop-flagged posts drop out of Hot and Rising (still visible in New/Top)
+      if (sort === "hot")    return q.neq("slop_status", "flagged").gte("created_at", day7).order("clout", { ascending: false });
       if (sort === "new")    return q.order("created_at", { ascending: false });
       if (sort === "top")    return q.order("clout",      { ascending: false });
-      if (sort === "rising") return q.gte("created_at", day1).order("clout",      { ascending: false });
+      if (sort === "rising") return q.neq("slop_status", "flagged").gte("created_at", day1).order("clout", { ascending: false });
       return q.order("created_at", { ascending: false });
     }
 
@@ -181,7 +182,9 @@ export default function FeedPage() {
       if (loaded.length === 0 || !currentUserId) return;
       const ids = loaded.map(p => p.id);
       const [{ data: ratings }, { data: bmarks }] = await Promise.all([
-        supabase.from("post_ratings").select("post_id, rating").in("post_id", ids),
+        // post_ratings is world-readable (vote counts), so filter to the
+        // signed-in user — otherwise anyone's vote lights up your arrows
+        supabase.from("post_ratings").select("post_id, rating").eq("user_id", currentUserId).in("post_id", ids),
         supabase.from("bookmarks").select("post_id").in("post_id", ids),
       ]);
       if (ratings) {
@@ -274,21 +277,25 @@ export default function FeedPage() {
       const followedIds = (followsRes.data ?? []).map((f: any) => f.following_id);
       const roomIds     = (membershipsRes.data ?? []).map((m: any) => m.room_id);
 
-      let q = supabase.from("posts").select(POST_SELECT);
+      // Front page = your own posts + people you follow + rooms you're in.
+      // Your own posts are always included so you never lose sight of what you
+      // shared (e.g. a post to the general feed while you're only in rooms).
+      const orParts: string[] = [`user_id.eq.${currentUserId}`];
+      if (followedIds.length > 0) orParts.push(`user_id.in.(${followedIds.join(",")})`);
+      if (roomIds.length > 0)     orParts.push(`room_id.in.(${roomIds.join(",")})`);
 
-      if (followedIds.length === 0 && roomIds.length === 0) {
-        // New user with no follows/rooms — show global feed so the page isn't empty
-        q = q; // no filter
-      } else if (followedIds.length > 0 && roomIds.length > 0) {
-        q = q.or(`user_id.in.(${followedIds.join(",")}),room_id.in.(${roomIds.join(",")})`);
-      } else if (followedIds.length > 0) {
-        q = q.in("user_id", followedIds);
-      } else {
-        q = q.in("room_id", roomIds);
+      const q = supabase.from("posts").select(POST_SELECT).or(orParts.join(","));
+      const { data } = await withSort(q).limit(40);
+      let loaded = mapPosts(data);
+
+      // Nothing personalised yet (new account, or your only posts fell outside
+      // the Hot/Rising window) — fall back to the global feed so the front page
+      // is never a dead end.
+      if (loaded.length === 0) {
+        const res = await withSort(supabase.from("posts").select(POST_SELECT)).limit(40);
+        loaded = mapPosts(res.data);
       }
 
-      const { data } = await withSort(q).limit(40);
-      const loaded = mapPosts(data);
       finish(loaded);
       await fetchVotes(loaded);
     }
@@ -500,7 +507,16 @@ export default function FeedPage() {
 
       {/* ── Detail panel ── */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        <PostDetail post={activePost} />
+        <PostDetail
+          post={activePost}
+          currentUserId={currentUserId ?? null}
+          userVote={activePost ? (userVotes[activePost.id] ?? null) : null}
+          onVote={handleVoteOptimistic}
+          onDeleted={(id) => {
+            setPosts(prev => prev.filter(p => p.id !== id));
+            setActiveId(cur => (cur === id ? null : cur));
+          }}
+        />
       </div>
 
       {/* ── Sidebar ── */}

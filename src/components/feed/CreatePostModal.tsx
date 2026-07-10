@@ -40,6 +40,27 @@ const PlusIcon = () => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+const ImageIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+  </svg>
+);
+const LinkChainIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </svg>
+);
+const CodeIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+  </svg>
+);
+const CalendarIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
 
 // Same normalization the server re-applies — just used here to dedupe against
 // what's already selected/typed before hitting the network.
@@ -47,14 +68,10 @@ function slugify(raw: string) {
   return raw.toLowerCase().trim().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-// ── Format config ─────────────────────────────────────────────────────────────
-const FORMATS = [
-  { value: "text",     label: "Text"     },
-  { value: "link",     label: "Link"     },
-  { value: "media",    label: "Images"   },
-  { value: "showcase", label: "Showcase" },
-] as const;
-type Format = typeof FORMATS[number]["value"];
+type Format = "text" | "link" | "media" | "showcase";
+
+const DRAFT_KEY = "sodev-post-draft";
+type Draft = { title: string; body: string; linkUrl: string; repoUrl: string; demoUrl: string };
 
 // ── Submit button ─────────────────────────────────────────────────────────────
 function SubmitButton() {
@@ -89,6 +106,26 @@ function Flag({ label, active, onToggle }: { label: string; active: boolean; onT
   );
 }
 
+// ── Attachment toggle button ─────────────────────────────────────────────────
+function AttachBtn({ icon, label, active, onClick }: {
+  icon: React.ReactNode; label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-[6px] px-3 py-[7px] rounded-[6px] text-[12px] font-medium transition-all"
+      style={
+        active
+          ? { background: "var(--color-accent-soft)", color: "var(--color-accent)", border: "1px solid var(--color-accent)" }
+          : { background: "var(--color-panel-2)", color: "var(--color-text-2)", border: "1px solid var(--color-line)" }
+      }
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 interface Props { open: boolean; onClose: () => void; }
 
@@ -97,7 +134,25 @@ export default function CreatePostModal({ open, onClose }: Props) {
   const [state, action] = useActionState(createPost, null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [format, setFormat]       = useState<Format>("text");
+  // Content — all controlled, so nothing is ever silently lost
+  const [title, setTitle]         = useState("");
+  const [body, setBody]           = useState("");
+  const [linkUrl, setLinkUrl]     = useState("");
+  const [repoUrl, setRepoUrl]     = useState("");
+  const [demoUrl, setDemoUrl]     = useState("");
+  const [images, setImages]       = useState<ImageState[]>([]);
+
+  // Attachment sections (closing one clears its fields — it's "remove attachment")
+  const [showImages, setShowImages] = useState(false);
+  const [showLink, setShowLink]     = useState(false);
+  const [showProject, setShowProject] = useState(false);
+
+  // Event — orthogonal to format: any post can also be an event with a date.
+  // The poster is just the post's image gallery; details live in the body.
+  const [isEvent, setIsEvent]       = useState(false);
+  const [eventStart, setEventStart] = useState("");
+
+  // Meta
   const [allTags, setAllTags]     = useState<Tag[]>([]);
   const [tagSearch, setTagSearch] = useState("");
   const [selected, setSelected]   = useState<Tag[]>([]);
@@ -107,12 +162,23 @@ export default function CreatePostModal({ open, onClose }: Props) {
   const [isOc, setIsOc]           = useState(false);
   const [rooms, setRooms]         = useState<Pick<Room, "id" | "name">[]>([]);
   const [roomId, setRoomId]       = useState<string>("");
-  const [images, setImages]       = useState<ImageState[]>([]);
   const [userId, setUserId]       = useState<string | null>(null);
-  const [linkUrl, setLinkUrl]     = useState("");
+  const [draftRestored, setDraftRestored] = useState(false);
   const fileInputRef              = useRef<HTMLInputElement>(null);
 
-  const linkEmbed = format === "link" ? detectEmbed(linkUrl) : null;
+  const doneImages = images.filter(i => i.status === "done");
+
+  // ── The format derives from what you attached — no tabs, no upfront choice.
+  // Repo/demo links make it a Showcase; images alone make it Images; a lone
+  // link makes it a Link post; nothing attached = Text. Priority mirrors how
+  // the post renders (project links are the strongest signal of intent).
+  const format: Format =
+    (repoUrl.trim() || demoUrl.trim()) ? "showcase"
+    : doneImages.length > 0            ? "media"
+    : linkUrl.trim()                   ? "link"
+    : "text";
+
+  const linkEmbed = linkUrl.trim() ? detectEmbed(linkUrl.trim()) : null;
 
   // Fetch tags, rooms, and current user ID once
   useEffect(() => {
@@ -126,11 +192,41 @@ export default function CreatePostModal({ open, onClose }: Props) {
     });
   }, []);
 
+  // ── Draft safety: restore text fields when the modal opens, save as you type.
+  // An accidental close or refresh never eats a half-written post again.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d: Draft = JSON.parse(raw);
+      if (d.title)   setTitle(d.title);
+      if (d.body)    setBody(d.body);
+      if (d.linkUrl) { setLinkUrl(d.linkUrl); setShowLink(true); }
+      if (d.repoUrl || d.demoUrl) { setRepoUrl(d.repoUrl ?? ""); setDemoUrl(d.demoUrl ?? ""); setShowProject(true); }
+      if (d.title || d.body || d.linkUrl || d.repoUrl || d.demoUrl) setDraftRestored(true);
+    } catch { /* corrupt draft — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const d: Draft = { title, body, linkUrl, repoUrl, demoUrl };
+    try {
+      if (title || body || linkUrl || repoUrl || demoUrl) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      } else {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+    } catch { /* storage full/blocked — drafts are best-effort */ }
+  }, [open, title, body, linkUrl, repoUrl, demoUrl]);
+
   // Reset and close on success
   useEffect(() => {
     if (!state?.success) return;
     formRef.current?.reset();
-    setFormat("text");
+    setTitle(""); setBody(""); setLinkUrl(""); setRepoUrl(""); setDemoUrl("");
+    setShowImages(false); setShowLink(false); setShowProject(false);
     setSelected([]);
     setNewTags([]);
     setTagSearch("");
@@ -138,9 +234,12 @@ export default function CreatePostModal({ open, onClose }: Props) {
     setIsSpoiler(false);
     setIsOc(false);
     setRoomId("");
-    setLinkUrl("");
+    setIsEvent(false);
+    setEventStart("");
+    setDraftRestored(false);
     images.forEach(img => URL.revokeObjectURL(img.preview));
     setImages([]);
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
     router.refresh();
     onClose();
   }, [state?.success, onClose, router]);
@@ -191,6 +290,27 @@ export default function CreatePostModal({ open, onClose }: Props) {
     });
   }
 
+  // Toggling a section off = removing that attachment
+  function toggleImages() {
+    if (showImages) {
+      images.forEach(img => URL.revokeObjectURL(img.preview));
+      setImages([]);
+    }
+    setShowImages(v => !v);
+  }
+  function toggleLink() {
+    if (showLink) setLinkUrl("");
+    setShowLink(v => !v);
+  }
+  function toggleProject() {
+    if (showProject) { setRepoUrl(""); setDemoUrl(""); }
+    setShowProject(v => !v);
+  }
+  function toggleEvent() {
+    if (isEvent) setEventStart("");
+    setIsEvent(v => !v);
+  }
+
   // Escape to close
   useEffect(() => {
     if (!open) return;
@@ -234,6 +354,10 @@ export default function CreatePostModal({ open, onClose }: Props) {
     setNewTags(prev => prev.filter(n => n !== name));
   }
 
+  const formatLabel: Record<Format, string> = {
+    text: "Text", link: "Link", media: "Images", showcase: "Showcase",
+  };
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       {/* scrim */}
@@ -249,9 +373,32 @@ export default function CreatePostModal({ open, onClose }: Props) {
           className="flex items-center justify-between px-6 py-4 flex-shrink-0"
           style={{ borderBottom: "1px solid var(--color-line)" }}
         >
-          <h2 className="text-[15px] font-semibold" style={{ color: "var(--color-text)" }}>
-            New Post
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[15px] font-semibold m-0" style={{ color: "var(--color-text)" }}>
+              New Post
+            </h2>
+            {/* Derived format — you never pick it, it follows what you attach */}
+            <span
+              className="text-[9.5px] tracking-[.1em] uppercase px-[7px] py-[3px] rounded-[3px] font-semibold"
+              style={
+                format === "showcase" ? { background: "var(--color-accent-soft)", color: "var(--color-accent)" }
+                : format === "link"   ? { background: "rgba(56,139,253,.14)", color: "#58a6ff" }
+                : format === "media"  ? { background: "rgba(255,86,48,.14)", color: "var(--color-ember)" }
+                : { background: "rgba(255,255,255,.06)", color: "var(--color-text-3)" }
+              }
+              title="Post type — set automatically by what you attach"
+            >
+              {formatLabel[format]}
+            </span>
+            {isEvent && (
+              <span
+                className="text-[9.5px] tracking-[.1em] uppercase px-[7px] py-[3px] rounded-[3px] font-semibold"
+                style={{ background: "rgba(46,164,79,.16)", color: "#3fb950" }}
+              >
+                Event
+              </span>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="grid place-items-center rounded-[6px] transition-all"
@@ -267,59 +414,127 @@ export default function CreatePostModal({ open, onClose }: Props) {
         <div className="overflow-y-auto scroll flex-1">
           <form ref={formRef} action={action} className="flex flex-col gap-5 p-6">
 
-            {/* hidden fields */}
+            {/* hidden fields — everything submits from state, so no typed text
+                is ever lost when an attachment section is opened or closed */}
             <input type="hidden" name="format"     value={format} />
+            <input type="hidden" name="link_url"   value={linkUrl.trim()} />
+            <input type="hidden" name="repo_url"   value={repoUrl.trim()} />
+            <input type="hidden" name="demo_url"   value={demoUrl.trim()} />
             <input type="hidden" name="tag_ids"    value={selected.map(t => t.id).join(",")} />
             <input type="hidden" name="new_tags"   value={newTags.join(",")} />
             <input type="hidden" name="is_nsfw"    value={isNsfw    ? "1" : "0"} />
             <input type="hidden" name="is_spoiler" value={isSpoiler ? "1" : "0"} />
             <input type="hidden" name="is_oc"      value={isOc      ? "1" : "0"} />
             <input type="hidden" name="room_id"    value={roomId} />
-            {format === "media" && (
-              <input type="hidden" name="images" value={JSON.stringify(
-                images.filter(i => i.status === "done").map(i => ({ path: i.path!, url: i.url! }))
-              )} />
-            )}
+            <input type="hidden" name="is_event"   value={isEvent ? "1" : "0"} />
+            <input type="hidden" name="event_starts_at" value={isEvent ? eventStart : ""} />
+            <input type="hidden" name="images" value={JSON.stringify(
+              doneImages.map(i => ({ path: i.path!, url: i.url! }))
+            )} />
 
-            {/* ── Format tabs ── */}
-            <div className="flex gap-2">
-              {FORMATS.map(f => (
+            {draftRestored && (
+              <p className="text-[11.5px] m-0 px-3 py-2 rounded-[6px]" style={{ background: "var(--color-panel-2)", color: "var(--color-text-3)", border: "1px solid var(--color-line)" }}>
+                Draft restored from last time.{" "}
                 <button
-                  key={f.value}
                   type="button"
-                  onClick={() => setFormat(f.value)}
-                  className="px-4 py-1.5 rounded-full text-[12px] font-medium tracking-wide transition-all"
-                  style={
-                    format === f.value
-                      ? { background: "var(--color-accent)", color: "#fff" }
-                      : { background: "var(--color-panel-2)", color: "var(--color-text-2)", border: "1px solid var(--color-line)" }
-                  }
+                  className="underline"
+                  style={{ color: "var(--color-text-2)" }}
+                  onClick={() => {
+                    setTitle(""); setBody(""); setLinkUrl(""); setRepoUrl(""); setDemoUrl("");
+                    setShowLink(false); setShowProject(false); setDraftRestored(false);
+                    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+                  }}
                 >
-                  {f.label}
+                  Discard it
                 </button>
-              ))}
-            </div>
+              </p>
+            )}
 
             {/* ── Title ── */}
             <div className="field">
-              <input id="cp-title" name="title" type="text" placeholder=" " required maxLength={120} />
+              <input
+                id="cp-title" name="title" type="text" placeholder=" " required maxLength={120}
+                value={title} onChange={e => setTitle(e.target.value)}
+              />
               <label htmlFor="cp-title">Title</label>
             </div>
 
-            {/* ── Link URL (link format only) ── */}
-            {format === "link" && (
+            {/* ── Body ── */}
+            <div
+              className="field"
+              style={{ height: "auto", paddingTop: 0, paddingBottom: 0 }}
+            >
+              <textarea
+                id="cp-body"
+                name="body_md"
+                placeholder=" "
+                rows={4}
+                required={format === "text"}
+                value={body}
+                onChange={e => setBody(e.target.value)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  resize: "vertical",
+                  width: "100%",
+                  color: "var(--color-text)",
+                  fontSize: 13.5,
+                  paddingTop: 20,
+                  paddingBottom: 8,
+                  lineHeight: 1.6,
+                }}
+              />
+              <label htmlFor="cp-body">
+                {format === "text" ? "What's on your mind? (Markdown supported)" : "Description (optional · Markdown supported)"}
+              </label>
+            </div>
+
+            {/* ── Add to your post ── */}
+            <div>
+              <p className="text-[11px] tracking-[.08em] uppercase mb-2" style={{ color: "var(--color-text-3)" }}>
+                Add to your post
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <AttachBtn icon={<ImageIcon />}     label={doneImages.length > 0 ? `Images (${doneImages.length})` : "Images"} active={showImages}  onClick={toggleImages} />
+                <AttachBtn icon={<LinkChainIcon />} label="Link / Video"    active={showLink}    onClick={toggleLink} />
+                <AttachBtn icon={<CodeIcon />}      label="Repo & Demo"     active={showProject} onClick={toggleProject} />
+                <AttachBtn icon={<CalendarIcon />}  label="Event"           active={isEvent}     onClick={toggleEvent} />
+              </div>
+            </div>
+
+            {/* ── Event section ── */}
+            {isEvent && (
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] tracking-[.08em] uppercase m-0" style={{ color: "var(--color-text-3)" }}>
+                  When is it?
+                </p>
+                <input
+                  type="datetime-local"
+                  required
+                  value={eventStart}
+                  onChange={e => setEventStart(e.target.value)}
+                  className="w-full rounded-[6px] text-[13px] px-3 py-[9px] outline-none"
+                  style={{ background: "var(--color-panel-2)", border: "1px solid var(--color-line)", color: eventStart ? "var(--color-text)" : "var(--color-text-3)", colorScheme: "dark" }}
+                />
+                <p className="text-[11px] m-0" style={{ color: "var(--color-text-3)" }}>
+                  Attach images to give it a poster — the first one is what people see on Explore. Details go in the description.
+                </p>
+              </div>
+            )}
+
+            {/* ── Link / video section ── */}
+            {showLink && (
               <div className="flex flex-col gap-3">
                 <div className="field">
                   <input
                     id="cp-link"
-                    name="link_url"
                     type="url"
                     placeholder=" "
-                    required
                     value={linkUrl}
                     onChange={e => setLinkUrl(e.target.value)}
                   />
-                  <label htmlFor="cp-link">URL</label>
+                  <label htmlFor="cp-link">Link or video URL (YouTube embeds automatically)</label>
                 </div>
                 {linkEmbed && (
                   <div className="rounded-[8px] overflow-hidden" style={{ border: "1px solid var(--color-line)" }}>
@@ -329,22 +544,28 @@ export default function CreatePostModal({ open, onClose }: Props) {
               </div>
             )}
 
-            {/* ── Showcase fields ── */}
-            {format === "showcase" && (
+            {/* ── Repo & demo section ── */}
+            {showProject && (
               <div className="flex flex-col gap-4">
                 <div className="field">
-                  <input id="cp-repo" name="repo_url" type="url" placeholder=" " />
-                  <label htmlFor="cp-repo">GitHub / Repo URL (optional)</label>
+                  <input
+                    id="cp-repo" type="url" placeholder=" "
+                    value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
+                  />
+                  <label htmlFor="cp-repo">GitHub / Repo URL</label>
                 </div>
                 <div className="field">
-                  <input id="cp-demo" name="demo_url" type="url" placeholder=" " />
+                  <input
+                    id="cp-demo" type="url" placeholder=" "
+                    value={demoUrl} onChange={e => setDemoUrl(e.target.value)}
+                  />
                   <label htmlFor="cp-demo">Live Demo URL (optional)</label>
                 </div>
               </div>
             )}
 
-            {/* ── Image upload (media format only) ── */}
-            {format === "media" && (
+            {/* ── Image upload section ── */}
+            {showImages && (
               <div>
                 <p className="text-[11px] tracking-[.08em] uppercase mb-2" style={{ color: "var(--color-text-3)" }}>
                   Images {images.length > 0 ? `(${images.length}/20)` : "(up to 20)"}
@@ -418,35 +639,6 @@ export default function CreatePostModal({ open, onClose }: Props) {
                 )}
               </div>
             )}
-
-            {/* ── Body (all formats except link where it's optional) ── */}
-            <div
-              className="field"
-              style={{ height: "auto", paddingTop: 0, paddingBottom: 0 }}
-            >
-              <textarea
-                id="cp-body"
-                name="body_md"
-                placeholder=" "
-                rows={4}
-                required={format !== "link" && format !== "showcase" && format !== "media"}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  resize: "vertical",
-                  width: "100%",
-                  color: "var(--color-text)",
-                  fontSize: 13.5,
-                  paddingTop: 20,
-                  paddingBottom: 8,
-                  lineHeight: 1.6,
-                }}
-              />
-              <label htmlFor="cp-body">
-                {format === "link" ? "Comment (optional)" : format === "media" ? "Caption (optional)" : "Description"}
-              </label>
-            </div>
 
             {/* ── Tag picker ── */}
             <div>

@@ -30,6 +30,9 @@ export async function createPost(_prev: unknown, formData: FormData) {
   const is_spoiler = formData.get("is_spoiler") === "1";
   const is_oc      = formData.get("is_oc")      === "1";
   const room_id    = (formData.get("room_id")   as string | null) || null;
+  const is_event   = formData.get("is_event")   === "1";
+  const eventStartRaw = (formData.get("event_starts_at") as string | null)?.trim() || null;
+  const event_starts_at = is_event && eventStartRaw ? new Date(eventStartRaw).toISOString() : null;
 
   const imagesRaw = (formData.get("images") as string | null)?.trim() || null;
   const imageList: { path: string; url: string }[] = imagesRaw ? JSON.parse(imagesRaw) : [];
@@ -39,6 +42,10 @@ export async function createPost(_prev: unknown, formData: FormData) {
     return { error: "Pick a post format." };
   if (format === "link" && !link_url) return { error: "A URL is required for Link posts." };
   if (format === "media" && imageList.length === 0) return { error: "At least one image is required." };
+  if (format === "text" && !body_md && !is_event) return { error: "Write something, or attach images or a link." };
+  if (is_event && !event_starts_at) return { error: "An event needs a date and time." };
+  if (is_event && new Date(event_starts_at!).getTime() < Date.now() - 60 * 60 * 1000)
+    return { error: "That event date is in the past." };
   if (tag_ids.length + new_tag_names.length > 5) return { error: "Maximum 5 tags per post." };
 
   // New tags: normalize, then upsert so a concurrent duplicate just no-ops
@@ -58,7 +65,7 @@ export async function createPost(_prev: unknown, formData: FormData) {
   // Insert the post row
   const { data: post, error: postErr } = await supabase
     .from("posts")
-    .insert({ user_id: user.id, format, title, body_md, link_url, room_id, is_nsfw, is_spoiler, is_oc })
+    .insert({ user_id: user.id, format, title, body_md, link_url, room_id, is_nsfw, is_spoiler, is_oc, is_event, event_starts_at })
     .select("id")
     .single();
 
@@ -72,13 +79,15 @@ export async function createPost(_prev: unknown, formData: FormData) {
     );
   }
 
-  // Showcase metadata (only for showcase format)
-  if (format === "showcase" && (repo_url || demo_url)) {
+  // Showcase metadata — attached whenever repo/demo links exist. The composer
+  // is content-first now: format is derived from what you attach, so a post
+  // can carry links AND images at once (a hackathon entry in one post).
+  if (repo_url || demo_url) {
     await supabase.from("showcase_meta").insert({ post_id: post.id, repo_url, demo_url });
   }
 
-  // Image gallery (only for media format)
-  if (format === "media" && imageList.length > 0) {
+  // Image gallery — any format can carry images (post_images keys off post_id)
+  if (imageList.length > 0) {
     await supabase.from("post_images").insert(
       imageList.map((img, i) => ({
         post_id:       post.id,
@@ -116,6 +125,51 @@ export async function votePost(
 
   revalidatePath(`/post/${postId}`);
   return { success: true, delta: data?.delta ?? 0, direction: data?.direction ?? direction };
+}
+
+// ── editPost ────────────────────────────────────────────────────────────────
+// Owner-only, title + body only, allowed for 24h after posting. The window,
+// ownership, and field scoping are all enforced inside the edit_post RPC.
+export async function editPost(
+  postId: string,
+  fields: { title: string; body_md: string | null },
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data, error } = await supabase.rpc("edit_post", {
+    p_post_id: postId,
+    p_title:   fields.title,
+    p_body_md: fields.body_md,
+  });
+
+  if (error)       return { error: error.message };
+  if (data?.error) return { error: data.error };
+
+  revalidatePath(`/post/${postId}`);
+  revalidatePath("/feed");
+  return { success: true };
+}
+
+// ── deletePost ──────────────────────────────────────────────────────────────
+// No time limit. RLS (posts_delete_own) guarantees a user can only delete
+// their own post; the extra user_id filter keeps it explicit.
+export async function deletePost(postId: string): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { error } = await supabase
+    .from("posts")
+    .delete()
+    .eq("id", postId)
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/feed");
+  return { success: true };
 }
 
 export async function toggleBookmark(postId: string): Promise<{ bookmarked?: boolean; error?: string }> {

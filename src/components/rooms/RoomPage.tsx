@@ -7,6 +7,7 @@ import { joinRoom, leaveRoom, updateRoomIcon } from "@/app/actions/rooms";
 import { votePost } from "@/app/actions/posts";
 import PostCard from "@/components/feed/PostCard";
 import PostDetail from "@/components/feed/PostDetail";
+import TopContributors from "@/components/leaderboard/TopContributors";
 import type { Post, Room } from "@/types";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -14,6 +15,8 @@ const UsersIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="n
 const EmptyIcon  = () => <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>;
 const CameraIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
 const SpinnerIcon = () => <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.22-8.56" strokeLinecap="round"/></svg>;
+const InviteIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M16 11a4 4 0 1 0-4-4"/><path d="M3 21v-1a5 5 0 0 1 5-5h1"/><path d="M19 16v6M22 19h-6"/></svg>;
+const ShieldIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10z"/></svg>;
 
 type Sort = "hot" | "new" | "top" | "rising";
 const SORTS: { value: Sort; label: string; icon: ReactNode }[] = [
@@ -97,6 +100,17 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
     setUploading(false);
   }
 
+  // Invite link — private rooms are reachable only by code, so members can share
+  const [inviteCopied, setInviteCopied] = useState(false);
+  function handleCopyInvite() {
+    if (!room.shareable_code) return;
+    const link = `${window.location.origin}/rooms/join/${room.shareable_code}`;
+    navigator.clipboard.writeText(link);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
+  const canInvite = room.type === "private" && !!room.shareable_code && (isOwner || joined);
+
   // Feed state
   const [sort,      setSort]      = useState<Sort>("hot");
   const [posts,     setPosts]     = useState<Post[]>([]);
@@ -145,6 +159,7 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
       const { data: ratings } = await supabase
         .from("post_ratings")
         .select("post_id, rating")
+        .eq("user_id", currentUserId) // ratings are world-readable — only highlight the viewer's own votes
         .in("post_id", loaded.map(p => p.id));
 
       if (ratings) {
@@ -243,6 +258,36 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
             <span className="text-[12px] font-medium">{memberCount.toLocaleString()}</span>
           </div>
 
+          {/* Mod queue — owners only; reports on this room's content land there */}
+          {isOwner && (
+            <a
+              href="/mod"
+              className="flex items-center gap-[6px] px-[13px] py-[7px] rounded-full text-[12px] font-semibold flex-shrink-0 transition-all"
+              style={{ background: "transparent", color: "var(--color-text-2)", border: "1px solid var(--color-line)", textDecoration: "none" }}
+              title="Review reports on this room's posts and comments"
+            >
+              <ShieldIcon />
+              Mod queue
+            </a>
+          )}
+
+          {/* Invite — private rooms only, for members who can share the link */}
+          {canInvite && (
+            <button
+              onClick={handleCopyInvite}
+              className="flex items-center gap-[6px] px-[13px] py-[7px] rounded-full text-[12px] font-semibold flex-shrink-0 transition-all"
+              style={{
+                background: "transparent",
+                color: inviteCopied ? "var(--color-accent)" : "var(--color-text-2)",
+                border: `1px solid ${inviteCopied ? "var(--color-accent)" : "var(--color-line)"}`,
+              }}
+              title="Copy an invite link for this private room"
+            >
+              <InviteIcon />
+              {inviteCopied ? "Link copied" : "Invite"}
+            </button>
+          )}
+
           {/* Join / Leave — only shown to logged-in users */}
           {currentUserId && (
             <button
@@ -290,6 +335,9 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
             ))}
           </div>
 
+          {/* Who's carrying this room — clout earned from posts in here */}
+          <TopContributors roomId={room.id} title="Top in this room · week" />
+
           {loading && (
             <div className="flex flex-col gap-0">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -321,7 +369,16 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
         </div>
 
         {/* Right: detail panel */}
-        <PostDetail post={activePost} />
+        <PostDetail
+          post={activePost}
+          currentUserId={currentUserId}
+          userVote={activePost ? (userVotes[activePost.id] ?? null) : null}
+          onVote={handleVoteOptimistic}
+          onDeleted={(id) => {
+            setPosts(prev => prev.filter(p => p.id !== id));
+            setActiveId(cur => (cur === id ? null : cur));
+          }}
+        />
       </div>
     </div>
   );

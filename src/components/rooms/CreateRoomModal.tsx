@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createRoom } from "@/app/actions/rooms";
 
@@ -19,6 +19,7 @@ interface Props { open: boolean; onClose: () => void; }
 
 export default function CreateRoomModal({ open, onClose }: Props) {
   const [state, action] = useActionState(createRoom, null);
+  const [roomType, setRoomType] = useState<"public" | "private">("public");
 
   // The server action redirects to the new room on success, so no explicit
   // close-on-success is needed — the user is taken there automatically.
@@ -67,16 +68,39 @@ export default function CreateRoomModal({ open, onClose }: Props) {
           {/* Type */}
           <div>
             <p className="text-[11px] tracking-[.08em] uppercase mb-2" style={{ color: "var(--color-text-3)" }}>Visibility</p>
+            {/* State-driven buttons + a hidden input. The old version used sr-only
+                radios with a has-[:checked] class, but the inline border style
+                overrode the class — clicks worked, the highlight never showed. */}
+            <input type="hidden" name="type" value={roomType} />
             <div className="flex gap-2">
               {(["public", "private"] as const).map(t => (
-                <label key={t} className="flex items-center gap-2 px-4 py-[8px] rounded-[6px] cursor-pointer text-[13px] font-medium has-[:checked]:border-[var(--color-accent)] transition-all"
-                  style={{ border: "1px solid var(--color-line)", color: "var(--color-text-2)" }}
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setRoomType(t)}
+                  className="flex items-center gap-2 px-4 py-[8px] rounded-[6px] cursor-pointer text-[13px] font-medium transition-all"
+                  style={
+                    roomType === t
+                      ? { border: "1px solid var(--color-accent)", background: "var(--color-accent-soft)", color: "var(--color-accent)" }
+                      : { border: "1px solid var(--color-line)", background: "transparent", color: "var(--color-text-2)" }
+                  }
                 >
-                  <input type="radio" name="type" value={t} defaultChecked={t === "public"} className="sr-only" />
+                  <span
+                    className="rounded-full"
+                    style={{
+                      width: 8, height: 8, flexShrink: 0,
+                      background: roomType === t ? "var(--color-accent)" : "var(--color-line)",
+                    }}
+                  />
                   <span className="capitalize">{t}</span>
-                </label>
+                </button>
               ))}
             </div>
+            <p className="text-[11px] mt-2 mb-0" style={{ color: "var(--color-text-3)" }}>
+              {roomType === "public"
+                ? "Anyone can find and join this room."
+                : "Hidden from browsing — people join with an invite link only."}
+            </p>
           </div>
 
           {state?.error && (

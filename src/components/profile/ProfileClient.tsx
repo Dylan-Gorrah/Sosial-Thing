@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { followUser, unfollowUser } from "@/app/actions/follows";
+import SaveButton from "@/components/shared/SaveButton";
+import { VerifiedChip, SlopChip } from "@/components/post/VerifyControls";
 import type { Post, Profile, CloutTier, AvailabilityStatus, UserBadge, BadgeTier, BadgeRarity } from "@/types";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -293,6 +295,8 @@ function ProfilePostCard({ post, authorProfile }: { post: Post; authorProfile: P
             <span className="text-[9.5px] tracking-[.08em] uppercase px-[7px] py-[3px] rounded-[3px]" style={formatBadge(post.format)}>
               {post.format}
             </span>
+            {post.verified && <VerifiedChip small />}
+            {post.slop_status === "flagged" && <SlopChip small />}
             {(post.tags ?? []).map(t => (
               <span key={t.id} className="text-[9.5px] tracking-[.08em] uppercase px-[7px] py-[3px] rounded-[3px]" style={{ background: "rgba(255,255,255,.05)", color: "var(--color-text-2)" }}>
                 {t.name}
@@ -302,8 +306,16 @@ function ProfilePostCard({ post, authorProfile }: { post: Post; authorProfile: P
           </div>
 
           {/* title */}
-          <h3 className="font-normal leading-[1.3] mb-1 mt-0" style={{ fontSize: 14.5, color: "var(--color-text)" }}>
-            {post.title}
+          <h3 className="font-normal leading-[1.3] mb-1 mt-0" style={{ fontSize: 14.5 }}>
+            <Link
+              href={`/post/${post.id}`}
+              className="transition-colors"
+              style={{ color: "var(--color-text)", textDecoration: "none" }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = "var(--color-accent)"}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = "var(--color-text)"}
+            >
+              {post.title}
+            </Link>
           </h3>
 
           {/* body preview */}
@@ -317,7 +329,7 @@ function ProfilePostCard({ post, authorProfile }: { post: Post; authorProfile: P
           <div className="flex items-center gap-3" style={{ color: "var(--color-text-3)" }}>
             <span className="text-[11px] tracking-[.05em]">{post.comment_count} comments</span>
             <div className="flex-1" />
-            <button style={{ color: "var(--color-text-3)" }} title="Save"><SaveIcon /></button>
+            <SaveButton postId={post.id} variant="icon" />
             <div className="flex items-center gap-[5px]">
               <span><UpIcon /></span>
               <span className="text-[12px] font-bold" style={{ color: "var(--color-accent)" }}>{post.clout}</span>

@@ -6,6 +6,9 @@ export type BadgeTier        = "bronze" | "silver" | "gold" | "platinum" | "lege
 export type BadgeRarity      = "common" | "rare" | "epic" | "legendary" | "secret";
 export type RoomRole         = "owner" | "admin" | "member";
 export type TagStatus        = "active" | "deprecated" | "alias";
+export type TrustLevel       = "standard" | "watch" | "restricted";
+export type SlopStatus       = "none" | "flagged" | "cleared";
+export type VerifyEvidence   = "ran_demo" | "read_code" | "watched_it_work" | "saw_in_person";
 
 export interface Profile {
   id: string;
@@ -24,6 +27,7 @@ export interface Profile {
   follower_count: number;
   following_count: number;
   streak: number;
+  trust_level: TrustLevel;
   last_activity_date: string | null;
   availability_status: AvailabilityStatus;
   join_date: string;
@@ -64,8 +68,15 @@ export interface Post {
   clout: number;
   comment_count: number;
   view_count: number;
+  is_event: boolean;
+  event_starts_at: string | null;
+  verified: boolean;
+  verified_at: string | null;
+  slop_status: SlopStatus;
+  slop_confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+  edited_at: string | null;
   // joined
   author?: Profile;
   tags?: Tag[];
@@ -125,6 +136,16 @@ export interface Badge {
   requirement: string;
   rarity: BadgeRarity;
   created_at: string;
+}
+
+export interface PostVerification {
+  id: string;
+  post_id: string;
+  verifier_id: string;
+  evidence: VerifyEvidence;
+  weight: number;
+  created_at: string;
+  verifier?: Profile;
 }
 
 export interface UserBadge {

@@ -18,9 +18,17 @@ export async function createRoom(_prev: unknown, formData: FormData) {
   if (!name || name.length < 2) return { error: "Room name must be at least 2 characters." };
   if (name.length > 30)         return { error: "Room name must be 30 characters or less." };
 
+  // Private rooms can't be discovered — they're reachable only by invite link,
+  // so they need a code from the moment they're created.
+  const shareable_code =
+    type === "private"
+      ? Array.from(crypto.getRandomValues(new Uint8Array(8)))
+          .map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10)
+      : null;
+
   const { data: room, error: roomErr } = await supabase
     .from("rooms")
-    .insert({ name, description, type, created_by: user.id })
+    .insert({ name, description, type, shareable_code, created_by: user.id })
     .select("id, name")
     .single();
 
@@ -30,11 +38,13 @@ export async function createRoom(_prev: unknown, formData: FormData) {
   }
 
   // Insert the creator as owner — must happen after the room exists
-  await supabase.from("room_members").insert({
+  const { error: memberErr } = await supabase.from("room_members").insert({
     room_id: room.id,
     user_id: user.id,
     role: "owner",
   });
+
+  if (memberErr) return { error: `Room created but couldn't add you as owner: ${memberErr.message}` };
 
   revalidatePath("/rooms");
   redirect(`/rooms/${room.name}`);
@@ -69,6 +79,19 @@ export async function joinRoom(roomId: string): Promise<{ error?: string; succes
 
   revalidatePath("/rooms");
   return { success: true };
+}
+
+export async function joinRoomByCode(code: string): Promise<{ error?: string; roomName?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in to join rooms." };
+
+  const { data, error } = await supabase.rpc("join_room_by_code", { p_code: code });
+  if (error)       return { error: error.message };
+  if (data?.error) return { error: data.error };
+
+  revalidatePath("/rooms");
+  return { roomName: data.room_name as string };
 }
 
 export async function leaveRoom(roomId: string): Promise<{ error?: string; success?: boolean }> {

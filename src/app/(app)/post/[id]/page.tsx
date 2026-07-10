@@ -2,6 +2,61 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import PostPage from "@/components/post/PostPage";
 import type { Post, Comment } from "@/types";
+import type { Metadata } from "next";
+
+// ── OG / Twitter cards ────────────────────────────────────────────────────────
+// The invisible half of sharing: a SoDev link pasted into WhatsApp, Discord or
+// X should unfurl with the post title, author and first image — not a blank
+// grey box. This is what makes shared hackathon entries actually get clicked.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("title, body_md, format, author:profiles(username, display_name), post_images(public_url, display_order)")
+    .eq("id", id)
+    .single();
+
+  if (!post) return { title: "Post not found · SoDev" };
+
+  const authorRaw = post.author as { username?: string; display_name?: string } | null;
+  const author = authorRaw?.display_name ?? authorRaw?.username ?? "a SoDev builder";
+
+  // Strip markdown syntax down to plain text for the description snippet
+  const description =
+    (post.body_md ?? "")
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/[#*`>\[\]()_~]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160) || `A ${post.format} post by ${author} on SoDev — where your code speaks.`;
+
+  const firstImage = ((post.post_images as { public_url: string; display_order: number }[]) ?? [])
+    .sort((a, b) => a.display_order - b.display_order)[0]?.public_url;
+
+  return {
+    title: `${post.title} · SoDev`,
+    description,
+    openGraph: {
+      title: post.title,
+      description,
+      type: "article",
+      siteName: "SoDev",
+      ...(firstImage ? { images: [{ url: firstImage }] } : {}),
+    },
+    twitter: {
+      card: firstImage ? "summary_large_image" : "summary",
+      title: post.title,
+      description,
+      ...(firstImage ? { images: [firstImage] } : {}),
+    },
+  };
+}
 
 export default async function PostPageRoute({
   params,
