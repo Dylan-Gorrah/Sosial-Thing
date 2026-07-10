@@ -1,12 +1,13 @@
 # Hackathon Prep — instructions for Claude Code
 
-> **STATUS (July 10):** Phase 2 items **1 (showcase upgrade)**, **2 (report button)**
-> and **3 (rate limiting)** are DONE — showcase via the composer redesign (July 5),
-> reports + mod queue and DB rate limits (5 posts/hr, 5 comments/min, 20 reports/hr)
-> this session; see `../Brain/Build Log - Reports and Moderation.md`.
-> Still open: **4 (demo cleanup script)**, **5 (deploy prep)**, **6 (event kit SQL)**.
-> Manual steps for Dylan: Supabase captcha/signup throttling (dashboard), and
-> `update profiles set is_admin = true where username = '<you>';`
+> **STATUS (July 11): ALL BUILD ITEMS DONE.** 1 (showcase) July 5; 2 (reports) +
+> 3 (rate limits) July 10; 4 (cleanup script — `supabase/cleanup_demo.sql`,
+> NOT yet run) + 6 (event kit — `supabase/hackathon/`) July 11. See
+> `../Brain/Build Log - Reports and Moderation.md` and `Build Log - Launch Kit.md`.
+> Item 5 (deploy) is Dylan-driven — guide in `DEPLOY.md`.
+> Manual steps for Dylan: deploy to Vercel; Supabase captcha/signup throttling +
+> production URLs (dashboard); `update profiles set is_admin = true where username = '<you>';`
+> run `cleanup_demo.sql` launch day; run the event kit when the hackathon spins up.
 
 You're working in the SoDev codebase (Next.js + Supabase). We're prepping the platform to host its first paid hackathon: R25 entry, one-week build, community + judge voting over a weekend, winner takes the pot.
 
