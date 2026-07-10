@@ -202,6 +202,26 @@ When you're actually ready to open the doors:
 
 ---
 
+## "Can I get hit with a surprise bill?"
+
+No. Neither Vercel nor Supabase asks for a credit card on their free plans —
+so they literally *cannot* charge you. If you ever blow past the free limits,
+the worst case is the app gets **paused** and you get an email. Paying is
+always a deliberate choice you make later by adding a card yourself.
+
+Things to know:
+
+- **Vercel free** = no card, hard limits, pauses if exceeded. Meant for
+  personal/non-commercial use — fine for a community hackathon; if Sideyard
+  becomes a real business one day, the honest move is Pro (~R400/mo).
+- **Supabase free** = no card. 500MB database, 1GB image storage, tens of
+  thousands of users — far more than launch needs. Exceed it and they
+  throttle and email, never bill. (Note: free projects pause after ~a week
+  of zero traffic — one visit wakes them up.)
+- **The domain** is the only real spend (~R150–300/yr, paid upfront to
+  Namecheap). Watch one thing: **renewal price** can be higher than the
+  intro deal — check it or switch off auto-renew.
+
 ## Quick cost summary
 
 | Thing | Cost to launch |
