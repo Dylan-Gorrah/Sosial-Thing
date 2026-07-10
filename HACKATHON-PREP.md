@@ -1,5 +1,13 @@
 # Hackathon Prep — instructions for Claude Code
 
+> **STATUS (July 10):** Phase 2 items **1 (showcase upgrade)**, **2 (report button)**
+> and **3 (rate limiting)** are DONE — showcase via the composer redesign (July 5),
+> reports + mod queue and DB rate limits (5 posts/hr, 5 comments/min, 20 reports/hr)
+> this session; see `../Brain/Build Log - Reports and Moderation.md`.
+> Still open: **4 (demo cleanup script)**, **5 (deploy prep)**, **6 (event kit SQL)**.
+> Manual steps for Dylan: Supabase captcha/signup throttling (dashboard), and
+> `update profiles set is_admin = true where username = '<you>';`
+
 You're working in the SoDev codebase (Next.js + Supabase). We're prepping the platform to host its first paid hackathon: R25 entry, one-week build, community + judge voting over a weekend, winner takes the pot.
 
 Context lives in two sibling folders — read these first:
