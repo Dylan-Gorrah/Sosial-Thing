@@ -19,6 +19,39 @@ Everything else in this doc is context and alternatives.
 
 ---
 
+## "Why not just GitHub Pages + a Namecheap domain?"
+
+Fair question — that's the classic cheap-launch recipe. Here's why it doesn't
+fit Sideyard:
+
+**GitHub Pages only serves static files.** It's a folder of unchanging HTML —
+great for a portfolio, useless for an app. Sideyard is a running program:
+when someone opens a post, the server builds that page live — checks the
+login cookie, fetches the post, generates the OG share card that makes links
+look good in WhatsApp. Login, server actions, per-post share cards, the mod
+queue — all of it needs a server. GitHub Pages doesn't have one.
+
+Forcing it in would mean rewriting the app as a static site and **losing
+share cards and server-side auth** — a downgrade that costs days of work to
+save R0, because:
+
+**Vercel is the same recipe, same price, with a server.**
+
+| | GitHub Pages | Vercel |
+|---|---|---|
+| Push to GitHub → live | yes | yes |
+| Runs Next.js server code | **no** | yes |
+| Custom Namecheap domain | yes | yes |
+| Auto-deploy on every push | yes | yes |
+| Cost | R0 | R0 |
+
+So your plan survives intact — push to GitHub, connect the host, add the
+domain, boom. Just swap the word "Pages" for "Vercel". The Namecheap domain
+(~R150–300/yr) is optional and can be added any time later without
+redeploying; launch day can be R0 on `sideyard.vercel.app`.
+
+---
+
 ## First, understand the two halves
 
 Sideyard is two pieces that live in different places:
