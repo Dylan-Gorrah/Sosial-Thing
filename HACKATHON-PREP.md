@@ -1,5 +1,18 @@
 # Hackathon Prep — instructions for Claude Code
 
+> **STATUS (Sept 4): NEW DATABASE + NEW REPO.** The app now runs on the Supabase
+> project **SosialThing** (`aigzawebapfohpkbxlcp`) and pushes to
+> **github.com/Dylan-Gorrah/Sosial-Thing**. The old project is gone — all 28
+> migrations were re-applied to the new one and it verifies clean (zero advisor
+> errors). Demo data is reseeded from `supabase/seed/demo_data.sql` (7 accounts,
+> password `demopass123`, `@demo.sodev` emails).
+> `cleanup_demo.sql` was REWRITTEN — it pointed at the old accounts and would
+> have deleted nothing. Note `dylangorrah` is now a demo account that gets
+> deleted; set `is_admin` on your real account after you sign up.
+> **Supabase Auth dashboard settings did NOT carry over** — Site URL, redirect
+> URLs, captcha and leaked-password protection all need doing on the new project.
+> See `../Brain/Build Log - New Supabase Project.md`.
+
 > **STATUS (July 11): ALL BUILD ITEMS DONE.** 1 (showcase) July 5; 2 (reports) +
 > 3 (rate limits) July 10; 4 (cleanup script — `supabase/cleanup_demo.sql`,
 > NOT yet run) + 6 (event kit — `supabase/hackathon/`) July 11. See

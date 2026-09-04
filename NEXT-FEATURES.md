@@ -1,5 +1,12 @@
 # Next Features — instructions for Claude Code (round 2)
 
+> **STATUS UPDATE (Sept 4):** Moved to a new Supabase project (**SosialThing**,
+> `aigzawebapfohpkbxlcp`) and a new repo (**Sosial-Thing**). Schema rebuilt from
+> all 28 migrations, demo data reseeded via `supabase/seed/demo_data.sql`.
+> `npm run build` passes. Nothing in the feature list below changed — item **5
+> (project posts)** and the PostDetail ImageCarousel cleanup are still open.
+> See `../Brain/Build Log - New Supabase Project.md`.
+
 > **STATUS UPDATE (July 10):** Item **2 (report system with room routing) is DONE** —
 > reports table + RPCs live, report buttons on posts/comments, /mod queue with
 > remove/ban actions, notifications. See `../Brain/Build Log - Reports and Moderation.md`.
