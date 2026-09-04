@@ -9,6 +9,30 @@ pointing a domain at it. That's the whole job.
 
 ---
 
+> ## ⚠️ Current setup (updated Sept 4, 2026 — read before following the steps)
+>
+> Some specifics below are out of date. The plain-English reasoning is all still
+> correct; these are the values that changed:
+>
+> - **GitHub repo:** `github.com/Dylan-Gorrah/Sosial-Thing` (not Sideyard).
+> - **Vercel Root Directory: LEAVE IT BLANK.** Step 4 in Option A says to set it
+>   to `sodev` if the app is in a subfolder. That no longer applies — the repo
+>   root *is* the Next app now. Setting it to `sodev` will fail the build.
+> - **Environment variables** for step 5, exactly these two:
+>   - `NEXT_PUBLIC_SUPABASE_URL` = `https://aigzawebapfohpkbxlcp.supabase.co`
+>   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = the anon key in your local `.env.local`
+> - **Supabase project** is now **SosialThing** (`aigzawebapfohpkbxlcp`). The old
+>   project is gone, so any old URL/key you have saved anywhere is dead.
+>
+> **The one thing that will bite you:** after the first deploy, go to Supabase →
+> Authentication → URL Configuration and set **Site URL** to your Vercel URL, and
+> add `https://<your-app>.vercel.app/**` to **Redirect URLs**. Until you do,
+> login works locally but breaks on the deployed site. None of the Auth dashboard
+> settings carried over to the new project — see
+> `../Brain/Build Log - New Supabase Project.md`.
+
+---
+
 ## The 30-second answer
 
 Use **Vercel**. It's made by the same team as Next.js, the free tier is enough
