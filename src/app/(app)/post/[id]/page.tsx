@@ -20,6 +20,9 @@ export async function generateMetadata({
     .from("posts")
     .select("title, body_md, format, author:profiles(username, display_name), post_images(public_url, display_order)")
     .eq("id", id)
+    // A removed post must not unfurl a rich preview in WhatsApp or Discord —
+    // that would keep the content alive in every chat it was ever pasted into.
+    .is("removed_at", null)
     .single();
 
   if (!post) return { title: "Post not found · SoDev" };
@@ -82,6 +85,27 @@ export default async function PostPageRoute({
   ]);
 
   if (!postRaw) notFound();
+
+  // A removed post stays reachable by direct link ONLY for the people who need
+  // it: its author (so they can see what happened) and whoever can act on it.
+  // Everyone else gets a 404 — otherwise "removed" just means "unlisted", and
+  // the link keeps working everywhere it was already shared.
+  if (postRaw.removed_at) {
+    const isAuthor = user?.id === postRaw.user_id;
+    let canModerate = false;
+
+    if (user && !isAuthor) {
+      const [{ data: siteAdmin }, { data: roomOwner }] = await Promise.all([
+        supabase.rpc("is_site_admin"),
+        postRaw.room_id
+          ? supabase.rpc("is_room_owner", { p_room_id: postRaw.room_id })
+          : Promise.resolve({ data: false }),
+      ]);
+      canModerate = Boolean(siteAdmin) || Boolean(roomOwner);
+    }
+
+    if (!isAuthor && !canModerate) notFound();
+  }
 
   const post: Post = {
     ...postRaw,

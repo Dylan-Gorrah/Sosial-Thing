@@ -12,6 +12,13 @@ users in the database and called the same functions the app calls. Where I say
 
 ---
 
+> [!check] Update — 6 Sept, later the same day
+> Findings **1, 2, 3, 4 and 6 are now fixed and verified** (migration
+> `20260906120000_audit_fixes.sql` plus the app-side changes). Each fix was
+> re-tested with the same probe that found the bug — see *Fix verification* at
+> the bottom. Finding 5 turned out to be intentional; see the correction there.
+> The low-priority cleanup items are still open by choice.
+
 ## The short version
 
 The **clout economy is genuinely solid** — I tried to farm it and couldn't. The
@@ -141,11 +148,14 @@ others:
 | Explore | Yes (everywhere) |
 | **Search** | **No** |
 
-So flagging something removes it from Hot, and it's still sitting on New. Whether
-that's a bug depends on intent — but right now it's *accidental*, not chosen.
-
-Worth deciding deliberately: should flagged posts be hidden, or shown with the
-slop chip they already have? Either is defensible; the inconsistency isn't.
+> [!note] Correction — I got this one wrong initially
+> I first wrote that this was accidental. It isn't. There's a comment in
+> `feed/page.tsx` saying exactly this: *"Slop-flagged posts drop out of Hot and
+> Rising (still visible in New/Top)"*. It's a deliberate design choice, and a
+> reasonable one — flagged posts lose their ranking but stay findable.
+>
+> What was genuinely inconsistent was **search**, which filtered nothing at all.
+> That part is now fixed. The Hot/New difference is left exactly as designed.
 
 ### 6. `search_posts` filters nothing
 
@@ -221,3 +231,29 @@ Being straight about the gaps:
 5. `no_self_follow` constraint (#4)
 6. Decide the slop-visibility rule and apply it consistently (#5, #6)
 7. Drop the dead table/column/format when convenient
+
+
+---
+
+## Fix verification (re-ran the original probes)
+
+| Was broken | Now |
+|---|---|
+| Removed post still in feed / search / stats | **Gone** — search returns nothing, landing count dropped 19 → 18, restored cleanly after |
+| Taken username → raw Postgres error | **"That username is already taken — try another."** — pre-checked before signUp, with the unique-violation still caught as a fallback |
+| `tags.post_count` stuck at 0, Explore rail empty | **Correct** — `career=4, databases=5, rust=3, ui-ux=2, webdev=3`; Explore now shows **9 tags** instead of 0 |
+| Tag counts drift as posts change | **Self-maintaining** — add/remove test went `3 → 4 → 3` |
+| Self-follow possible | **Rejected by constraint**; follower counts still all match their rows |
+| `search_posts` returned removed posts | **Filtered** at the database level |
+
+Where removed posts now stand:
+
+- **Hidden** from the feed (every sort), Explore, search, tag pages, profiles,
+  room pages, the landing counters, and link previews in WhatsApp/Discord.
+- **Still reachable by direct link** for the author (so they can see what
+  happened) and for anyone who can moderate it (site admin or room owner).
+  Everyone else gets a 404. Removing something has to actually remove it, or
+  "removed" just means "unlisted" and every already-shared link keeps working.
+
+TypeScript passes clean. Database state is back to seeded values: 25 votes,
+6 verifications, 0 removed posts, 0 self-follows, follower counts all matching.

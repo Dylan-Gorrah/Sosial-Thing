@@ -43,13 +43,35 @@ export async function register(_prev: unknown, formData: FormData) {
     return { error: "Username must be 3–20 chars, letters/numbers/underscores only." };
   }
 
+  // Check the name is free BEFORE creating the auth user. Without this, signUp
+  // succeeds, the handle_new_user trigger hits the unique index on
+  // profiles.username, and the raw Postgres error is shown to the person:
+  // 'duplicate key value violates unique constraint "profiles_username_key"'.
+  // Profiles are public-read, so this lookup needs no privileges.
+  const { data: taken } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (taken) return { error: "That username is already taken — try another." };
+
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { username } },
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    // Belt and braces: two people can still claim the same name in the gap
+    // between the check above and the insert. Catch the unique violation and
+    // say something human instead of leaking table and column names.
+    const raw = error.message ?? "";
+    if (raw.includes("profiles_username_key") || raw.includes("duplicate key")) {
+      return { error: "That username is already taken — try another." };
+    }
+    return { error: raw || "Could not create your account. Try again." };
+  }
 
   return { success: true, email };
 }

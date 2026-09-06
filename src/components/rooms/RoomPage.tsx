@@ -136,7 +136,8 @@ export default function RoomPage({ room, isMember: initIsMember, isOwner, curren
         showcase_meta(repo_url, demo_url),
         room:rooms(id, name)
       `)
-      .eq("room_id", room.id);
+      .eq("room_id", room.id)
+      .is("removed_at", null);
 
     if (sort === "hot")    q = q.gte("created_at", day7).order("clout",      { ascending: false });
     if (sort === "new")    q = q.order("created_at", { ascending: false });

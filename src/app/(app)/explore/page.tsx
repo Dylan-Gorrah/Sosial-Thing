@@ -146,7 +146,8 @@ export default async function ExplorePage({
     showcase_meta(repo_url, demo_url)
   `;
 
-  let q = supabase.from("posts").select(POST_SELECT).neq("slop_status", "flagged");
+  let q = supabase.from("posts").select(POST_SELECT)
+    .is("removed_at", null).neq("slop_status", "flagged");
   if (days !== null) {
     q = q.gte("created_at", new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString());
   }
@@ -170,6 +171,7 @@ export default async function ExplorePage({
   // Quiet period — show newest instead of a blank page ("small but alive")
   if (posts.length === 0) {
     const { data } = await supabase.from("posts").select(POST_SELECT)
+      .is("removed_at", null)
       .neq("slop_status", "flagged").order("created_at", { ascending: false }).limit(25);
     posts = (data ?? []) as unknown as FeedPost[];
     quietFallback = true;
@@ -202,14 +204,14 @@ export default async function ExplorePage({
     if (folIds.length > 0)  orParts.push(`user_id.in.(${folIds.join(",")})`);
     if (roomIds.length > 0) orParts.push(`room_id.in.(${roomIds.join(",")})`);
     const { data } = await supabase.from("posts").select(EVENT_SELECT)
-      .eq("is_event", true).neq("slop_status", "flagged")
+      .eq("is_event", true).is("removed_at", null).neq("slop_status", "flagged")
       .gte("event_starts_at", sinceYesterday)
       .or(orParts.join(","))
       .order("event_starts_at", { ascending: true }).limit(4);
     upcomingEvents = (data ?? []) as unknown as EventPost[];
   } else {
     const { data } = await supabase.from("posts").select(EVENT_SELECT)
-      .eq("is_event", true).neq("slop_status", "flagged")
+      .eq("is_event", true).is("removed_at", null).neq("slop_status", "flagged")
       .gte("event_starts_at", sinceYesterday)
       .order("event_starts_at", { ascending: true }).limit(4);
     upcomingEvents = (data ?? []) as unknown as EventPost[];

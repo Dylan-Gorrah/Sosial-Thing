@@ -24,6 +24,7 @@ export default async function UserProfilePage({ params }: Props) {
       .from("posts")
       .select("*, post_tags(tags(id,slug,name)), showcase_meta(repo_url,demo_url), post_images(id,public_url,display_order,caption,width,height)", { count: "exact" })
       .eq("user_id", profile.id)
+      .is("removed_at", null)
       .order("created_at", { ascending: false })
       .limit(20),
     user && !isOwn

@@ -160,6 +160,10 @@ export default function FeedPage() {
     `;
 
     function withSort(q: any) {
+      // Moderator-removed posts never appear in any listing, on any sort.
+      // Every feed query goes through here, so this is the one place to enforce it.
+      q = q.is("removed_at", null);
+
       // Slop-flagged posts drop out of Hot and Rising (still visible in New/Top)
       if (sort === "hot")    return q.neq("slop_status", "flagged").gte("created_at", day7).order("clout", { ascending: false });
       if (sort === "new")    return q.order("created_at", { ascending: false });

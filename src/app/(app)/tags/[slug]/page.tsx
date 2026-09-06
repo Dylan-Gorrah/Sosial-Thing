@@ -34,6 +34,7 @@ export default async function TagRoute({ params }: { params: Promise<{ slug: str
         post_images(id, public_url, display_order, caption, width, height)
       `)
       .in("id", postIds)
+      .is("removed_at", null)
       .order("clout", { ascending: false })
       .limit(40);
 
